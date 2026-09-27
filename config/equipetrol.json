@@ -1,0 +1,545 @@
+{
+    "map": {
+        "image": "../data/equipetrol.png",
+        "attribution": "© OpenStreetMap contributors",
+        "bounds": {
+            "north": -17.75147,
+            "south": -17.77655,
+            "west": -63.21443,
+            "east": -63.18718
+        }
+    },
+    "nodes": [
+        {
+            "id": "n0",
+            "lat": -17.77122,
+            "lon": -63.21080
+        },
+        {
+            "id": "n1",
+            "lat": -17.76589,
+            "lon": -63.20543
+        },
+        {
+            "id": "n2",
+            "lat": -17.76185,
+            "lon": -63.20295
+        },
+        {
+            "id": "n3",
+            "lat": -17.75703,
+            "lon": -63.20101
+        },
+        {
+            "id": "n4",
+            "lat": -17.75453,
+            "lon": -63.19730
+        },
+        {
+            "id": "n5",
+            "lat": -17.75218,
+            "lon": -63.19193
+        },
+        {
+            "id": "n6",
+            "lat": -17.75931,
+            "lon": -63.19948
+        },
+        {
+            "id": "n7",
+            "lat": -17.76134,
+            "lon": -63.19808
+        },
+        {
+            "id": "n8",
+            "lat": -17.76323,
+            "lon": -63.19676
+        },
+        {
+            "id": "n9",
+            "lat": -17.76487,
+            "lon": -63.19560
+        },
+        {
+            "id": "n10",
+            "lat": -17.76667,
+            "lon": -63.19436
+        },
+        {
+            "id": "n11",
+            "lat": -17.76785,
+            "lon": -63.19358
+        },
+        {
+            "id": "n12",
+            "lat": -17.77177,
+            "lon": -63.19081
+        },
+        {
+            "id": "n13",
+            "lat": -17.75676,
+            "lon": -63.19057
+        },
+        {
+            "id": "n14",
+            "lat": -17.75978,
+            "lon": -63.19123
+        },
+        {
+            "id": "n15",
+            "lat": -17.76197,
+            "lon": -63.19147
+        },
+        {
+            "id": "n16",
+            "lat": -17.76283,
+            "lon": -63.19131
+        },
+        {
+            "id": "n17",
+            "lat": -17.76577,
+            "lon": -63.19098
+        },
+        {
+            "id": "n18",
+            "lat": -17.76793,
+            "lon": -63.19065
+        },
+        {
+            "id": "n19",
+            "lat": -17.77106,
+            "lon": -63.18875
+        },
+        {
+            "id": "n20",
+            "lat": -17.76812,
+            "lon": -63.20320
+        },
+        {
+            "id": "n21",
+            "lat": -17.76566,
+            "lon": -63.20006
+        },
+        {
+            "id": "n22",
+            "lat": -17.77232,
+            "lon": -63.20345
+        },
+        {
+            "id": "n23",
+            "lat": -17.76930,
+            "lon": -63.20142
+        },
+        {
+            "id": "n24",
+            "lat": -17.76714,
+            "lon": -63.19895
+        },
+        {
+            "id": "n25",
+            "lat": -17.77302,
+            "lon": -63.19783
+        },
+        {
+            "id": "n26",
+            "lat": -17.77373,
+            "lon": -63.19214
+        },
+        {
+            "id": "n27",
+            "lat": -17.76342,
+            "lon": -63.20171
+        },
+        {
+            "id": "n28",
+            "lat": -17.75911,
+            "lon": -63.19511
+        },
+        {
+            "id": "n29",
+            "lat": -17.76930,
+            "lon": -63.19647
+        }
+    ],
+    "streets": [
+        {
+            "id": "s0",
+            "from": "n0",
+            "to": "n1",
+            "oneWay": false
+        },
+        {
+            "id": "s1",
+            "from": "n1",
+            "to": "n2",
+            "oneWay": false
+        },
+        {
+            "id": "s2",
+            "from": "n2",
+            "to": "n3",
+            "oneWay": false
+        },
+        {
+            "id": "s3",
+            "from": "n3",
+            "to": "n4",
+            "oneWay": false
+        },
+        {
+            "id": "s4",
+            "from": "n4",
+            "to": "n5",
+            "oneWay": false
+        },
+        {
+            "id": "s5",
+            "from": "n3",
+            "to": "n6",
+            "oneWay": false
+        },
+        {
+            "id": "s6",
+            "from": "n6",
+            "to": "n7",
+            "oneWay": false
+        },
+        {
+            "id": "s7",
+            "from": "n7",
+            "to": "n8",
+            "oneWay": false
+        },
+        {
+            "id": "s8",
+            "from": "n8",
+            "to": "n9",
+            "oneWay": false
+        },
+        {
+            "id": "s9",
+            "from": "n9",
+            "to": "n10",
+            "oneWay": false
+        },
+        {
+            "id": "s10",
+            "from": "n10",
+            "to": "n11",
+            "oneWay": false
+        },
+        {
+            "id": "s11",
+            "from": "n11",
+            "to": "n12",
+            "oneWay": false
+        },
+        {
+            "id": "s12",
+            "from": "n5",
+            "to": "n13",
+            "oneWay": false
+        },
+        {
+            "id": "s13",
+            "from": "n13",
+            "to": "n14",
+            "oneWay": false
+        },
+        {
+            "id": "s14",
+            "from": "n14",
+            "to": "n15",
+            "oneWay": false
+        },
+        {
+            "id": "s15",
+            "from": "n15",
+            "to": "n16",
+            "oneWay": false
+        },
+        {
+            "id": "s16",
+            "from": "n16",
+            "to": "n17",
+            "oneWay": false
+        },
+        {
+            "id": "s17",
+            "from": "n17",
+            "to": "n18",
+            "oneWay": false
+        },
+        {
+            "id": "s18",
+            "from": "n18",
+            "to": "n19",
+            "oneWay": false
+        },
+        {
+            "id": "s19",
+            "from": "n20",
+            "to": "n21",
+            "oneWay": true
+        },
+        {
+            "id": "s20",
+            "from": "n21",
+            "to": "n8",
+            "oneWay": true
+        },
+        {
+            "id": "s21",
+            "from": "n8",
+            "to": "n15",
+            "oneWay": true
+        },
+        {
+            "id": "s22",
+            "from": "n16",
+            "to": "n9",
+            "oneWay": true
+        },
+        {
+            "id": "s23",
+            "from": "n9",
+            "to": "n24",
+            "oneWay": true
+        },
+        {
+            "id": "s24",
+            "from": "n24",
+            "to": "n23",
+            "oneWay": true
+        },
+        {
+            "id": "s25",
+            "from": "n23",
+            "to": "n22",
+            "oneWay": true
+        },
+        {
+            "id": "s26",
+            "from": "n0",
+            "to": "n22",
+            "oneWay": false
+        },
+        {
+            "id": "s27",
+            "from": "n22",
+            "to": "n25",
+            "oneWay": false
+        },
+        {
+            "id": "s28",
+            "from": "n25",
+            "to": "n26",
+            "oneWay": false
+        },
+        {
+            "id": "s29",
+            "from": "n26",
+            "to": "n12",
+            "oneWay": false
+        },
+        {
+            "id": "s30",
+            "from": "n12",
+            "to": "n19",
+            "oneWay": false
+        },
+        {
+            "id": "s31",
+            "from": "n1",
+            "to": "n20",
+            "oneWay": false
+        },
+        {
+            "id": "s32",
+            "from": "n20",
+            "to": "n23",
+            "oneWay": false
+        },
+        {
+            "id": "s33",
+            "from": "n20",
+            "to": "n22",
+            "oneWay": false
+        },
+        {
+            "id": "s34",
+            "from": "n2",
+            "to": "n27",
+            "oneWay": false
+        },
+        {
+            "id": "s35",
+            "from": "n27",
+            "to": "n21",
+            "oneWay": false
+        },
+        {
+            "id": "s36",
+            "from": "n27",
+            "to": "n7",
+            "oneWay": true
+        },
+        {
+            "id": "s37",
+            "from": "n6",
+            "to": "n27",
+            "oneWay": true
+        },
+        {
+            "id": "s38",
+            "from": "n21",
+            "to": "n24",
+            "oneWay": false
+        },
+        {
+            "id": "s39",
+            "from": "n4",
+            "to": "n28",
+            "oneWay": false
+        },
+        {
+            "id": "s40",
+            "from": "n28",
+            "to": "n7",
+            "oneWay": false
+        },
+        {
+            "id": "s41",
+            "from": "n28",
+            "to": "n14",
+            "oneWay": false
+        },
+        {
+            "id": "s42",
+            "from": "n6",
+            "to": "n28",
+            "oneWay": false
+        },
+        {
+            "id": "s43",
+            "from": "n10",
+            "to": "n17",
+            "oneWay": true
+        },
+        {
+            "id": "s44",
+            "from": "n18",
+            "to": "n11",
+            "oneWay": true
+        },
+        {
+            "id": "s45",
+            "from": "n24",
+            "to": "n29",
+            "oneWay": false
+        },
+        {
+            "id": "s46",
+            "from": "n29",
+            "to": "n11",
+            "oneWay": false
+        },
+        {
+            "id": "s47",
+            "from": "n29",
+            "to": "n25",
+            "oneWay": false
+        },
+        {
+            "id": "s48",
+            "from": "n23",
+            "to": "n29",
+            "oneWay": false
+        }
+    ],
+    "restaurants": [
+        {
+            "id": "r0",
+            "name": "Equipe Pollo",
+            "node": "n3",
+            "pickupSlots": 2,
+            "prepTimeMs": [
+                60000,
+                180000
+            ]
+        },
+        {
+            "id": "r1",
+            "name": "Brigida Cafe",
+            "node": "n28",
+            "pickupSlots": 1,
+            "prepTimeMs": [
+                90000,
+                240000
+            ]
+        },
+        {
+            "id": "r2",
+            "name": "Wistupiku",
+            "node": "n27",
+            "pickupSlots": 2,
+            "prepTimeMs": [
+                45000,
+                150000
+            ]
+        },
+        {
+            "id": "r3",
+            "name": "San Martino",
+            "node": "n8",
+            "pickupSlots": 3,
+            "prepTimeMs": [
+                60000,
+                200000
+            ]
+        },
+        {
+            "id": "r4",
+            "name": "Fino Juve",
+            "node": "n29",
+            "pickupSlots": 2,
+            "prepTimeMs": [
+                120000,
+                240000
+            ]
+        },
+        {
+            "id": "r5",
+            "name": "Pollos Ojeda",
+            "node": "n12",
+            "pickupSlots": 2,
+            "prepTimeMs": [
+                60000,
+                180000
+            ]
+        }
+    ],
+    "fleet": {
+        "couriers": 8,
+        "bagCapacity": 3,
+        "speedKmh": 30,
+        "startNode": "n8"
+    },
+    "orders": {
+        "meanIntervalMs": 20000,
+        "burstMax": 12,
+        "maxPending": 50,
+        "seed": 42
+    },
+    "dispatch": {
+        "quoteTimeoutMs": 200,
+        "acceptTimeoutMs": 600000
+    },
+    "incidents": {
+        "breakdownProbability": 0.02
+    },
+    "simulation": {
+        "durationS": 3600,
+        "timeScale": 60
+    }
+}
