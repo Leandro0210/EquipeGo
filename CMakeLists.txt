@@ -35,6 +35,7 @@ endif()
 # Archivos fuente del proyecto
 set(SOURCES
     src/main.cpp
+    src/ConfigLoader.cpp
 )
 
 # Target principal obligatorio: delivery_sim

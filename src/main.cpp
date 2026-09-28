@@ -1,10 +1,14 @@
+#include "Config.hpp"
 #include <iostream>
-#include <nlohmann/json.hpp>
-#include <opencv2/core.hpp>
 
 int main(int argc, char *argv[]) {
-  (void)argc;
-  (void)argv;
-  std::cout << "OpenCV version: " << CV_VERSION << "\n";
+  SimulationConfig config;
+  if (!loadAndValidateConfig(argc, argv, config)) {
+    return 1;
+  }
+
+  std::cout << "Config loaded successfully: " << config.nodes.size()
+            << " nodes, " << config.streets.size() << " streets, "
+            << config.restaurants.size() << " restaurants.\n";
   return 0;
 }
