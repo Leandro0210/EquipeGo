@@ -36,6 +36,7 @@ endif()
 set(SOURCES
     src/main.cpp
     src/ConfigLoader.cpp
+    src/Logger.cpp
 )
 
 # Target principal obligatorio: delivery_sim
