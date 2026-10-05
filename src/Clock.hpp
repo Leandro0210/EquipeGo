@@ -1,30 +1,27 @@
-#ifndef CLOCK_HPP
-#define CLOCK_HPP
+#pragma once
 
 #include <chrono>
 
 class SimulationClock {
 private:
   double timeScale = 1.0;
-  std::chrono::time_point<std::chrono::steady_clock> startTime;
+  std::chrono::steady_clock::time_point startTime =
+      std::chrono::steady_clock::now();
 
 public:
-  // Inicia el cronómetro guardando la escala y el tiempo real en el que arrancó
+  // Inicia o reinicia el reloj de simulación.
   void start(double scale) {
     timeScale = scale;
     startTime = std::chrono::steady_clock::now();
   }
 
-  // Calcula el tiempo simulado desde que se llamó a start()
+  // Devuelve los milisegundos transcurridos en tiempo simulado.
   long long getSimulatedTimeMs() const {
-    auto ahora = std::chrono::steady_clock::now();
-    auto msReales =
-        std::chrono::duration_cast<std::chrono::milliseconds>(ahora - startTime)
-            .count();
+    const auto ahora = std::chrono::steady_clock::now();
 
-    // Multiplicamos los milisegundos reales por la escala de la simulación
-    return static_cast<long long>(msReales * timeScale);
+    const auto tiempoReal =
+        std::chrono::duration<double, std::milli>(ahora - startTime).count();
+
+    return static_cast<long long>(tiempoReal * timeScale);
   }
 };
-
-#endif // CLOCK_HPP
