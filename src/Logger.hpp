@@ -1,27 +1,22 @@
-#ifndef LOGGER_HPP
-#define LOGGER_HPP
+#pragma once
 
 #include <fstream>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 
-
 class EventLogger {
 private:
   std::ofstream fileStream;
-  std::mutex logMutex; // El candado de exclusión mutua (Carpeta 06)
+  std::mutex logMutex;
 
 public:
-  // Constructor y Destructor
-  EventLogger(const std::string &filename);
-  ~EventLogger();
+  explicit EventLogger(const std::string &filename);
+  ~EventLogger() = default;
 
-  // Imprime la frase de inicio obligatoria
+  // Mensaje obligatorio al iniciar la simulación.
   void logStart();
 
-  // Escribe un evento en el JSON de forma segura contra hilos
+  // Escribe un evento JSON de forma segura entre múltiples hilos.
   void logEvent(nlohmann::json eventJson, long long simulatedTimeMs);
 };
-
-#endif // LOGGER_HPP
