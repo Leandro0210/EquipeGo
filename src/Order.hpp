@@ -1,5 +1,7 @@
-#include <iostream>
+#pragma once
+
 #include <string>
+#include <utility>
 
 struct Order {
   std::string orderId;
@@ -7,21 +9,15 @@ struct Order {
   std::string deliveryNodeId;
   long long time;
 
-  Order(std::string id, std::string rest, std::string node, long long t) {
-    orderId = id;
-    restauranteId = rest;
-    deliveryNodeId = node;
-    time = t;
-  }
+  Order(std::string id, std::string rest, std::string node, long long t)
+      : orderId(std::move(id)), restauranteId(std::move(rest)),
+        deliveryNodeId(std::move(node)), time(t) {}
 
-  // Prohíbe crear una copia
+  // Un pedido no puede copiarse.
   Order(const Order &other) = delete;
-  // Prohíbe asignar una copia
   Order &operator=(const Order &other) = delete;
 
-  // Permitir movimiento (Para transferir el pedido de la fila a la moto)
-  Order(Order &&other) = default;
-  Order &operator=(Order &&other) = default;
+  // Un pedido sí puede transferirse a otro propietario.
+  Order(Order &&other) noexcept = default;
+  Order &operator=(Order &&other) noexcept = default;
 };
-
-int main() { return 0; }
