@@ -289,18 +289,6 @@
             "oneWay": true
         },
         {
-            "id": "s21",
-            "from": "n8",
-            "to": "n15",
-            "oneWay": true
-        },
-        {
-            "id": "s22",
-            "from": "n16",
-            "to": "n9",
-            "oneWay": true
-        },
-        {
             "id": "s23",
             "from": "n9",
             "to": "n24",
@@ -409,30 +397,6 @@
             "oneWay": false
         },
         {
-            "id": "s41",
-            "from": "n28",
-            "to": "n14",
-            "oneWay": false
-        },
-        {
-            "id": "s42",
-            "from": "n6",
-            "to": "n28",
-            "oneWay": false
-        },
-        {
-            "id": "s43",
-            "from": "n10",
-            "to": "n17",
-            "oneWay": true
-        },
-        {
-            "id": "s44",
-            "from": "n18",
-            "to": "n11",
-            "oneWay": true
-        },
-        {
             "id": "s45",
             "from": "n24",
             "to": "n29",
@@ -448,12 +412,6 @@
             "id": "s47",
             "from": "n29",
             "to": "n25",
-            "oneWay": false
-        },
-        {
-            "id": "s48",
-            "from": "n23",
-            "to": "n29",
             "oneWay": false
         }
     ],
