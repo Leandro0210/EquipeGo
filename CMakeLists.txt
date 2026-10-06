@@ -45,6 +45,7 @@ set(SOURCES
     src/OrderBook.cpp
     src/OrderGenerator.cpp
     src/OrderProducer.cpp
+    src/RoadNetwork.cpp
 )
 
 # Target principal obligatorio
