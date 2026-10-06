@@ -44,6 +44,7 @@ set(SOURCES
     src/Logger.cpp
     src/OrderBook.cpp
     src/OrderGenerator.cpp
+    src/OrderProducer.cpp
 )
 
 # Target principal obligatorio
