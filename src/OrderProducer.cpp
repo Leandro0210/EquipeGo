@@ -9,9 +9,10 @@
 
 OrderProducer::OrderProducer(const SimulationConfig &config,
                              OrderBook &orderBook, EventLogger &logger,
-                             SimulationClock &clock)
+                             SimulationClock &clock,
+                             const RoadNetwork &roadNetwork)
     : config(config), orderBook(orderBook), logger(logger), clock(clock),
-      generator(config.orders) {}
+      roadNetwork(roadNetwork), generator(config.orders) {}
 
 void OrderProducer::run() {
   while (true) {
@@ -48,13 +49,27 @@ void OrderProducer::run() {
 
       const std::string orderId = "o" + std::to_string(nextOrderNumber++);
 
+      // Todo pedido primero se registra como creado.
       logger.logEvent({{"event", "orderCreated"},
                        {"order", orderId},
                        {"restaurant", restaurant.id}},
                       creationTime);
 
+      // Si desde el restaurante no existe ruta válida hacia el destino,
+      // el pedido termina inmediatamente como unreachable.
+      if (!roadNetwork.isReachable(restaurant.nodeId, deliveryNode.id)) {
+
+        logger.logEvent({{"event", "orderRejected"},
+                         {"order", orderId},
+                         {"reason", "unreachable"}},
+                        creationTime);
+
+        continue;
+      }
+
       Order order(orderId, restaurant.id, deliveryNode.id, creationTime);
 
+      // Si el libro ya está lleno, el pedido se rechaza por queueFull.
       if (!orderBook.tryAdd(std::move(order))) {
         logger.logEvent({{"event", "orderRejected"},
                          {"order", orderId},

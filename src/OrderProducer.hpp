@@ -5,6 +5,7 @@
 #include "Logger.hpp"
 #include "OrderBook.hpp"
 #include "OrderGenerator.hpp"
+#include "RoadNetwork.hpp"
 
 #include <condition_variable>
 #include <cstddef>
@@ -16,6 +17,7 @@ private:
   OrderBook &orderBook;
   EventLogger &logger;
   SimulationClock &clock;
+  const RoadNetwork &roadNetwork;
 
   OrderGenerator generator;
 
@@ -27,11 +29,10 @@ private:
 
 public:
   OrderProducer(const SimulationConfig &config, OrderBook &orderBook,
-                EventLogger &logger, SimulationClock &clock);
+                EventLogger &logger, SimulationClock &clock,
+                const RoadNetwork &roadNetwork);
 
-  // Función que ejecutará el hilo generador.
   void run();
 
-  // Solicita que el hilo termine y lo despierta si está esperando.
   void requestStop();
 };
