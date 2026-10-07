@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Clock.hpp"
-#include "Config.hpp"
-#include "Logger.hpp"
-#include "OrderBook.hpp"
-#include "OrderGenerator.hpp"
-#include "RoadNetwork.hpp"
+#include "core/Clock.hpp"
+#include "config/Config.hpp"
+#include "core/Logger.hpp"
+#include "orders/OrderBook.hpp"
+#include "orders/OrderGenerator.hpp"
+#include "map/RoadNetwork.hpp"
 
 #include <condition_variable>
 #include <cstddef>
