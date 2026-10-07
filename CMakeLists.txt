@@ -46,6 +46,7 @@ set(SOURCES
     src/orders/OrderGenerator.cpp
     src/orders/OrderProducer.cpp
     src/map/RoadNetwork.cpp
+    src/fleet/Courier.cpp
 )
 
 # Target principal obligatorio
