@@ -1,7 +1,10 @@
 #include "RoadNetwork.hpp"
-
+#include <algorithm>
+#include <functional>
+#include <limits>
 #include <queue>
-#include <unordered_set>
+#include <unordered_map>
+#include <utility>
 
 RoadNetwork::RoadNetwork(const SimulationConfig &config) {
   for (const Node &node : config.nodes) {
@@ -9,51 +12,87 @@ RoadNetwork::RoadNetwork(const SimulationConfig &config) {
   }
 
   for (const Street &street : config.streets) {
-    adjacency[street.from].push_back(street.to);
+    adjacency[street.from].push_back(Edge{street.to, street.lengthMeters});
 
     if (!street.oneWay) {
-      adjacency[street.to].push_back(street.from);
+      adjacency[street.to].push_back(Edge{street.from, street.lengthMeters});
     }
   }
 }
 
 bool RoadNetwork::isReachable(const std::string &from,
                               const std::string &to) const {
+  return shortestRoute(from, to).has_value();
+}
+
+std::optional<Route> RoadNetwork::shortestRoute(const std::string &from,
+                                                const std::string &to) const {
   if (adjacency.find(from) == adjacency.end() ||
       adjacency.find(to) == adjacency.end()) {
-    return false;
+    return std::nullopt;
   }
 
   if (from == to) {
-    return true;
+    return Route{{from}, 0.0};
   }
 
-  std::queue<std::string> pending;
-  std::unordered_set<std::string> visited;
+  using QueueItem = std::pair<double, std::string>;
 
-  pending.push(from);
-  visited.insert(from);
+  std::priority_queue<QueueItem, std::vector<QueueItem>,
+                      std::greater<QueueItem>>
+      pending;
+
+  std::unordered_map<std::string, double> distance;
+  std::unordered_map<std::string, std::string> previous;
+
+  const double infinity = std::numeric_limits<double>::infinity();
+
+  for (const auto &entry : adjacency) {
+    distance[entry.first] = infinity;
+  }
+
+  distance[from] = 0.0;
+  pending.push({0.0, from});
 
   while (!pending.empty()) {
-    const std::string current = pending.front();
+    const auto [currentDistance, current] = pending.top();
     pending.pop();
 
-    const auto it = adjacency.find(current);
-
-    if (it == adjacency.end()) {
+    if (currentDistance > distance[current]) {
       continue;
     }
 
-    for (const std::string &neighbor : it->second) {
-      if (neighbor == to) {
-        return true;
-      }
+    if (current == to) {
+      break;
+    }
 
-      if (visited.insert(neighbor).second) {
-        pending.push(neighbor);
+    for (const Edge &edge : adjacency.at(current)) {
+      const double candidate = currentDistance + edge.lengthMeters;
+
+      if (candidate < distance[edge.to]) {
+        distance[edge.to] = candidate;
+        previous[edge.to] = current;
+        pending.push({candidate, edge.to});
       }
     }
   }
 
-  return false;
+  if (distance[to] == infinity) {
+    return std::nullopt;
+  }
+
+  std::vector<std::string> path;
+
+  std::string current = to;
+
+  while (current != from) {
+    path.push_back(current);
+    current = previous.at(current);
+  }
+
+  path.push_back(from);
+
+  std::reverse(path.begin(), path.end());
+
+  return Route{std::move(path), distance[to]};
 }
