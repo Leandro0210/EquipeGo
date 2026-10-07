@@ -41,6 +41,11 @@ endif()
 set(SOURCES
     src/main.cpp
     src/ConfigLoader.cpp
+    src/Logger.cpp
+    src/OrderBook.cpp
+    src/OrderGenerator.cpp
+    src/OrderProducer.cpp
+    src/RoadNetwork.cpp
 )
 
 # Target principal obligatorio
