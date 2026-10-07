@@ -1,44 +1,68 @@
 #include "Clock.hpp"
 #include "Config.hpp"
 #include "Logger.hpp"
-#include <chrono>
-#include <iostream>
-#include <thread> // Para simular una pausa
+#include "OrderBook.hpp"
+#include "OrderProducer.hpp"
+#include "RoadNetwork.hpp"
 
+#include <chrono>
+#include <exception>
+#include <iostream>
+#include <thread>
 
 int main(int argc, char *argv[]) {
   SimulationConfig config;
+
   if (!loadAndValidateConfig(argc, argv, config)) {
     return 1;
   }
 
-  std::cout << "\n--- INICIANDO PRUEBA DE RELOJ Y LOGGER ---\n";
+  try {
+    // Reloj global de la simulación.
+    SimulationClock clock;
+    clock.start(config.simulation.timeScale);
 
-  // 1. Encendemos el reloj (Acelerado a 60x como pide la simulación)
-  SimulationClock reloj;
-  reloj.start(60.0);
+    // Registro de eventos.
+    EventLogger logger(config.logFilePath);
 
-  // 2. Preparamos el Logger pasándole el nombre del archivo (events.log)
-  EventLogger logger(config.logFilePath);
-  logger.logStart(); // Esto imprime el mensaje obligatorio en consola
+    // Red de calles usada para comprobar alcanzabilidad.
+    RoadNetwork roadNetwork(config);
 
-  // 3. Simulamos un evento inventado: Un pedido acaba de nacer
-  nlohmann::json evento1 = {{"type", "orderCreated"}, {"orderId", "o1"}};
-  // Lo mandamos a escribir. ¡Ojo! Aquí le inyectamos la hora del reloj.
-  logger.logEvent(evento1, reloj.getSimulatedTimeMs());
+    // Libro compartido de pedidos pendientes.
+    OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
 
-  // 4. Hacemos que el programa "duerma" medio segundo real para que el tiempo
-  // avance
-  std::cout << "Esperando medio segundo real...\n";
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // Productor que generará los pedidos.
+    OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
 
-  // 5. Simulamos otro evento: El pedido se asignó a una moto
-  nlohmann::json evento2 = {
-      {"type", "orderAssigned"}, {"orderId", "o1"}, {"courier", "c1"}};
-  // Lo mandamos a escribir. La hora aquí debería ser mayor.
-  logger.logEvent(evento2, reloj.getSimulatedTimeMs());
+    // Todos los componentes ya están preparados.
+    logger.logStart();
 
-  std::cout << "Prueba terminada. Se creó el archivo: " << config.logFilePath
-            << "\n";
-  return 0;
+    // Primer hilo real de la simulación.
+    std::thread producerThread(&OrderProducer::run, &producer);
+
+    // durationS está expresado en tiempo simulado.
+    if (config.simulation.durationS > 0) {
+      const double realDurationSeconds =
+          static_cast<double>(config.simulation.durationS) /
+          config.simulation.timeScale;
+
+      std::this_thread::sleep_for(
+          std::chrono::duration<double>(realDurationSeconds));
+
+      logger.logEvent({{"event", "simulationStopping"}},
+                      clock.getSimulatedTimeMs());
+
+      // Despierta al productor si estaba esperando.
+      producer.requestStop();
+    }
+
+    // main espera a que el hilo productor termine.
+    producerThread.join();
+
+    return 0;
+
+  } catch (const std::exception &error) {
+    std::cerr << "Error: " << error.what() << '\n';
+    return 1;
+  }
 }
