@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "config/Config.hpp"
@@ -19,7 +20,10 @@ private:
   const RoadNetwork &roadNetwork;
   SimulationClock &clock;
 
+  // Protege el estado compartido del repartidor.
   mutable std::mutex stateMutex;
+
+  // Permite esperar trabajo sin consumir CPU.
   std::condition_variable workCv;
 
   std::string currentNode;
@@ -28,17 +32,20 @@ private:
   std::optional<std::string> destination;
   bool stopRequested = false;
 
+  // Movimiento por las calles de la ruta.
+  bool travelTo(const std::string &targetNode);
+
 public:
   Courier(std::string id, const SimulationConfig &config,
           const RoadNetwork &roadNetwork, SimulationClock &clock);
 
-  // Método que ejecutará el hilo del repartidor.
+  // Metodo ejecutado por el hilo del repartidor.
   void run();
 
-  // Entrega un destino al repartidor si está disponible.
+  // Asignar un destino si el repartidor esta disponible.
   bool assignDestination(const std::string &nodeId);
 
-  // Solicita que el hilo termine.
+  // Solicitar la finalizacion del hilo.
   void requestStop();
 
   std::string getId() const;
