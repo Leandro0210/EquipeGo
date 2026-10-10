@@ -1,9 +1,11 @@
-#include "core/Clock.hpp"
+
 #include "config/Config.hpp"
+#include "core/Clock.hpp"
 #include "core/Logger.hpp"
+#include "fleet/Fleet.hpp"
+#include "map/RoadNetwork.hpp"
 #include "orders/OrderBook.hpp"
 #include "orders/OrderProducer.hpp"
-#include "map/RoadNetwork.hpp"
 
 #include <chrono>
 #include <exception>
@@ -18,29 +20,41 @@ int main(int argc, char *argv[]) {
   }
 
   try {
-    // Reloj global de la simulación.
+    // ================================================
+    // PREPARAR COMPONENTES
+    // ================================================
+
     SimulationClock clock;
     clock.start(config.simulation.timeScale);
 
-    // Registro de eventos.
     EventLogger logger(config.logFilePath);
-
-    // Red de calles usada para comprobar alcanzabilidad.
     RoadNetwork roadNetwork(config);
 
-    // Libro compartido de pedidos pendientes.
     OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
 
-    // Productor que generará los pedidos.
     OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
 
-    // Todos los componentes ya están preparados.
+    // La flota utiliza el mismo mapa y reloj.
+    Fleet fleet(config, roadNetwork, clock);
+
     logger.logStart();
 
-    // Primer hilo real de la simulación.
+    // ================================================
+    // INICIAR HILOS
+    // ================================================
+
+    // Un hilo independiente por repartidor.
+    fleet.start();
+
+    std::cout << "Flota iniciada con " << fleet.size() << " repartidores.\n";
+
+    // Hilo independiente del productor.
     std::thread producerThread(&OrderProducer::run, &producer);
 
-    // durationS está expresado en tiempo simulado.
+    // ================================================
+    // DURACION DE LA SIMULACION
+    // ================================================
+
     if (config.simulation.durationS > 0) {
       const double realDurationSeconds =
           static_cast<double>(config.simulation.durationS) /
@@ -52,12 +66,31 @@ int main(int argc, char *argv[]) {
       logger.logEvent({{"event", "simulationStopping"}},
                       clock.getSimulatedTimeMs());
 
-      // Despierta al productor si estaba esperando.
+      // Detener la generacion de pedidos.
       producer.requestStop();
     }
 
-    // main espera a que el hilo productor termine.
+    // ================================================
+    // FINALIZACION ORDENADA
+    // ================================================
+
+    // Esperar a que termine el productor.
     producerThread.join();
+
+    // Cerrar el libro a futuros consumidores.
+    orderBook.requestStop();
+
+    // Despertar y detener todos los repartidores.
+    fleet.requestStop();
+
+    // Esperar los hilos de las motos.
+    fleet.join();
+
+    std::cout << "Flota detenida correctamente.\n";
+
+    // DP.4 consumira los pedidos del libro.
+    // Hasta entonces permanecen en espera.
+    std::cout << "Pedidos esperando Dispatcher: " << orderBook.size() << '\n';
 
     return 0;
 
