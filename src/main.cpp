@@ -2,17 +2,23 @@
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
 #include "core/Logger.hpp"
+#include "dispatch/Dispatcher.hpp"
 #include "fleet/Fleet.hpp"
 #include "map/RoadNetwork.hpp"
 #include "orders/OrderBook.hpp"
 #include "orders/OrderProducer.hpp"
 
 #include <chrono>
+#include <cstddef>
 #include <exception>
+#include <functional>
 #include <iostream>
+#include <stdexcept>
 #include <thread>
+#include <vector>
 
 int main(int argc, char *argv[]) {
+
   SimulationConfig config;
 
   if (!loadAndValidateConfig(argc, argv, config)) {
@@ -20,9 +26,9 @@ int main(int argc, char *argv[]) {
   }
 
   try {
-    // ================================================
+    // ============================================
     // PREPARAR COMPONENTES
-    // ================================================
+    // ============================================
 
     SimulationClock clock;
     clock.start(config.simulation.timeScale);
@@ -34,28 +40,34 @@ int main(int argc, char *argv[]) {
 
     OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
 
-    // La flota utiliza el mismo mapa y reloj.
     Fleet fleet(config, roadNetwork, clock);
+
+    Dispatcher dispatcher(config, roadNetwork, fleet);
 
     logger.logStart();
 
-    // ================================================
-    // INICIAR HILOS
-    // ================================================
+    // ============================================
+    // INICIAR COMPONENTES CONCURRENTES
+    // ============================================
 
-    // Un hilo independiente por repartidor.
     fleet.start();
 
     std::cout << "Flota iniciada con " << fleet.size() << " repartidores.\n";
 
-    // Hilo independiente del productor.
+    std::thread dispatcherThread(&Dispatcher::run, &dispatcher,
+                                 std::ref(orderBook), std::ref(logger),
+                                 std::ref(clock));
+
     std::thread producerThread(&OrderProducer::run, &producer);
 
-    // ================================================
-    // DURACION DE LA SIMULACION
-    // ================================================
+    std::cout << "Dispatcher iniciado.\n";
+
+    // ============================================
+    // DURACION DE SIMULACION
+    // ============================================
 
     if (config.simulation.durationS > 0) {
+
       const double realDurationSeconds =
           static_cast<double>(config.simulation.durationS) /
           config.simulation.timeScale;
@@ -65,37 +77,83 @@ int main(int argc, char *argv[]) {
 
       logger.logEvent({{"event", "simulationStopping"}},
                       clock.getSimulatedTimeMs());
-
-      // Detener la generacion de pedidos.
-      producer.requestStop();
     }
 
-    // ================================================
-    // FINALIZACION ORDENADA
-    // ================================================
+    // ============================================
+    // DETENER EL PRODUCTOR
+    // ============================================
 
-    // Esperar a que termine el productor.
+    producer.requestStop();
     producerThread.join();
 
-    // Cerrar el libro a futuros consumidores.
-    orderBook.requestStop();
+    // ============================================
+    // DETENER EL DISPATCHER
+    // ============================================
 
-    // Despertar y detener todos los repartidores.
+    dispatcher.requestStop(orderBook);
+    dispatcherThread.join();
+
+    // ============================================
+    // DETENER LA FLOTA
+    // ============================================
+
     fleet.requestStop();
-
-    // Esperar los hilos de las motos.
     fleet.join();
 
-    std::cout << "Flota detenida correctamente.\n";
+    // ============================================
+    // FINALIZAR PEDIDOS QUE SIGUEN EN ORDERBOOK
+    // ============================================
 
-    // DP.4 consumira los pedidos del libro.
-    // Hasta entonces permanecen en espera.
-    std::cout << "Pedidos esperando Dispatcher: " << orderBook.size() << '\n';
+    std::vector<Order> remainingOrders = orderBook.takeRemaining();
+
+    std::size_t bookPendingCount = 0;
+
+    for (Order &order : remainingOrders) {
+
+      if (!order.transitionTo(OrderState::Pending)) {
+
+        throw std::logic_error("No se pudo finalizar el pedido: " +
+                               order.orderId);
+      }
+
+      logger.logEvent({{"event", "orderPending"}, {"order", order.orderId}},
+                      clock.getSimulatedTimeMs());
+
+      ++bookPendingCount;
+    }
+
+    // ============================================
+    // RESUMEN PROVISIONAL
+    // ============================================
+
+    const std::size_t dispatcherPending = dispatcher.getPendingCount();
+
+    const std::size_t totalPending = dispatcherPending + bookPendingCount;
+
+    std::cout << "\n=== RESUMEN DISPATCHER ===\n";
+
+    std::cout << "Pedidos asignados: " << dispatcher.getAssignedCount() << '\n';
+
+    std::cout << "Pedidos rechazados noCourier: "
+              << dispatcher.getRejectedCount() << '\n';
+
+    std::cout << "Pendientes en Dispatcher: " << dispatcherPending << '\n';
+
+    std::cout << "Pendientes recuperados de OrderBook: " << bookPendingCount
+              << '\n';
+
+    std::cout << "Total pendientes sin asignar: " << totalPending << '\n';
+
+    std::cout << "Pedidos restantes en OrderBook: " << orderBook.size() << '\n';
+
+    std::cout << "Flota detenida correctamente.\n";
 
     return 0;
 
   } catch (const std::exception &error) {
+
     std::cerr << "Error: " << error.what() << '\n';
+
     return 1;
   }
 }

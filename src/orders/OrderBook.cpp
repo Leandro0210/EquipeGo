@@ -1,12 +1,17 @@
 
 #include "orders/OrderBook.hpp"
 
+#include <stdexcept>
 #include <utility>
+
+// =====================================================
+// CONSTRUCTOR
+// =====================================================
 
 OrderBook::OrderBook(std::size_t maxPending) : maxPending(maxPending) {}
 
 // =====================================================
-// PRODUCTOR: INSERTAR PEDIDO
+// INSERTAR PEDIDO
 // =====================================================
 
 bool OrderBook::tryAdd(Order &&order) {
@@ -20,28 +25,25 @@ bool OrderBook::tryAdd(Order &&order) {
     orders.push_back(std::move(order));
   }
 
-  // Avisar a un consumidor que hay un nuevo pedido.
   ordersCv.notify_one();
-
   return true;
 }
 
 // =====================================================
-// CONSUMIDOR: ESPERAR Y EXTRAER PEDIDO
+// ESPERAR Y EXTRAER PEDIDO
 // =====================================================
 
 std::optional<Order> OrderBook::waitAndTake() {
   std::unique_lock<std::mutex> lock(bookMutex);
 
-  ordersCv.wait(lock, [this]() { return !orders.empty() || stopRequested; });
+  ordersCv.wait(lock, [this] { return !orders.empty() || stopRequested; });
 
-  // Al detener la simulacion, conservar los
-  // pedidos restantes para contabilizarlos despues.
+  // Conservar los pedidos que siguen en cola
+  // cuando la simulacion termina.
   if (stopRequested) {
     return std::nullopt;
   }
 
-  // FIFO: extraer el pedido mas antiguo.
   Order order = std::move(orders.front());
   orders.pop_front();
 
@@ -49,7 +51,7 @@ std::optional<Order> OrderBook::waitAndTake() {
 }
 
 // =====================================================
-// DETENER LIBRO DE PEDIDOS
+// DETENER ORDERBOOK
 // =====================================================
 
 void OrderBook::requestStop() {
@@ -58,12 +60,40 @@ void OrderBook::requestStop() {
     stopRequested = true;
   }
 
-  // Despertar a todos los consumidores bloqueados.
   ordersCv.notify_all();
 }
 
 // =====================================================
-// CONSULTAS PROTEGIDAS POR MUTEX
+// RECUPERAR PEDIDOS AL FINALIZAR
+// =====================================================
+
+std::vector<Order> OrderBook::takeRemaining() {
+
+  std::vector<Order> remaining;
+
+  {
+    std::lock_guard<std::mutex> lock(bookMutex);
+
+    if (!stopRequested) {
+      throw std::logic_error(
+          "Debe detenerse OrderBook antes de recuperar pedidos");
+    }
+
+    remaining.reserve(orders.size());
+
+    // Transferir cada pedido sin copiarlo.
+    while (!orders.empty()) {
+      remaining.push_back(std::move(orders.front()));
+
+      orders.pop_front();
+    }
+  }
+
+  return remaining;
+}
+
+// =====================================================
+// CONSULTAS SEGURAS
 // =====================================================
 
 std::size_t OrderBook::size() const {

@@ -6,6 +6,7 @@
 #include "map/RoadNetwork.hpp"
 #include "orders/Order.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -13,9 +14,10 @@
 #include <string>
 #include <vector>
 
-// =====================================================
-// RESULTADOS DE LAS COTIZACIONES
-// =====================================================
+class OrderBook;
+class EventLogger;
+class SimulationClock;
+class QuoteExecutor;
 
 struct EtaQuote {
   std::size_t courierIndex;
@@ -33,18 +35,8 @@ struct QuoteBatch {
   std::vector<QuoteFailure> failures;
 };
 
-// Implementacion privada en Dispatcher.cpp.
-class QuoteExecutor;
-
-// Calculador alternativo para pruebas controladas.
-// Recibe origen, restaurante y destino.
-// Devuelve ETA en segundos simulados.
 using QuoteCalculator = std::function<double(
     const std::string &, const std::string &, const std::string &)>;
-
-// =====================================================
-// DISPATCHER
-// =====================================================
 
 class Dispatcher {
 private:
@@ -53,9 +45,15 @@ private:
   Fleet &fleet;
 
   QuoteCalculator calculator;
-
-  // Trabajadores reutilizables para calcular ETA.
   std::unique_ptr<QuoteExecutor> executor;
+
+  // Control seguro del hilo del despachador.
+  std::atomic<bool> stopRequested{false};
+
+  // Contadores de este componente.
+  std::atomic<std::size_t> assignedCount{0};
+  std::atomic<std::size_t> rejectedCount{0};
+  std::atomic<std::size_t> pendingCount{0};
 
 public:
   Dispatcher(const SimulationConfig &config, const RoadNetwork &roadNetwork,
@@ -66,10 +64,20 @@ public:
   Dispatcher(const Dispatcher &) = delete;
   Dispatcher &operator=(const Dispatcher &) = delete;
 
-  // Calcula ETA en paralelo respetando
-  // dispatch.quoteTimeoutMs (tiempo real).
+  // DP.4: cotizaciones y seleccion.
   QuoteBatch quoteCandidates(const Order &order) const;
 
-  // Intenta asignar a la moto con menor ETA.
   std::optional<std::string> assignBestCourier(Order &order) const;
+
+  // DP.4: consumidor automatico del OrderBook.
+  void run(OrderBook &orderBook, EventLogger &logger, SimulationClock &clock);
+
+  // Solicita apagado y despierta las esperas.
+  void requestStop(OrderBook &orderBook);
+
+  std::size_t getAssignedCount() const { return assignedCount.load(); }
+
+  std::size_t getRejectedCount() const { return rejectedCount.load(); }
+
+  std::size_t getPendingCount() const { return pendingCount.load(); }
 };

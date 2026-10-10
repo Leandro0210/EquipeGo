@@ -8,16 +8,17 @@
 #include <deque>
 #include <mutex>
 #include <optional>
+#include <vector>
 
 class OrderBook {
 private:
   std::size_t maxPending;
   std::deque<Order> orders;
 
-  // Protege el acceso a la cola compartida.
+  // Protege el acceso concurrente a la cola.
   mutable std::mutex bookMutex;
 
-  // Despierta a un consumidor cuando llega un pedido.
+  // Despierta al Dispatcher cuando hay pedidos.
   std::condition_variable ordersCv;
 
   bool stopRequested = false;
@@ -25,16 +26,19 @@ private:
 public:
   explicit OrderBook(std::size_t maxPending);
 
-  // Productor: intenta insertar un pedido.
+  // Productor: insertar un nuevo pedido.
   bool tryAdd(Order &&order);
 
-  // Consumidor: espera un pedido y lo extrae en orden FIFO.
-  // Devuelve nullopt cuando se solicita detener el libro.
+  // Consumidor: esperar y extraer en orden FIFO.
   std::optional<Order> waitAndTake();
 
-  // Detiene nuevas inserciones y despierta a los consumidores.
-  // Conserva los pedidos que siguen pendientes.
+  // Detener nuevas inserciones y despertar consumidores.
   void requestStop();
+
+  // Recuperar todos los pedidos restantes.
+  // Utilizar despues de detener el OrderBook
+  // y finalizar el hilo consumidor.
+  std::vector<Order> takeRemaining();
 
   std::size_t size() const;
   bool full() const;

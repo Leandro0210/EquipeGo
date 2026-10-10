@@ -49,6 +49,7 @@ set(SOURCES
     src/fleet/Courier.cpp
     src/fleet/Fleet.cpp
     src/dispatch/Dispatcher.cpp
+    src/dispatch/DispatchLoop.cpp
 )
 
 # Target principal obligatorio
