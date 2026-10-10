@@ -14,8 +14,14 @@
 #include <functional>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
+
+// =====================================================
+// MAIN - EQUIPEGO
+// =====================================================
 
 int main(int argc, char *argv[]) {
 
@@ -27,7 +33,7 @@ int main(int argc, char *argv[]) {
 
   try {
     // ============================================
-    // PREPARAR COMPONENTES
+    // 1. PREPARAR COMPONENTES
     // ============================================
 
     SimulationClock clock;
@@ -47,7 +53,7 @@ int main(int argc, char *argv[]) {
     logger.logStart();
 
     // ============================================
-    // INICIAR COMPONENTES CONCURRENTES
+    // 2. INICIAR HILOS
     // ============================================
 
     fleet.start();
@@ -63,7 +69,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Dispatcher iniciado.\n";
 
     // ============================================
-    // DURACION DE SIMULACION
+    // 3. DURACION DE LA SIMULACION
     // ============================================
 
     if (config.simulation.durationS > 0) {
@@ -80,28 +86,97 @@ int main(int argc, char *argv[]) {
     }
 
     // ============================================
-    // DETENER EL PRODUCTOR
+    // 4. DETENER PRODUCTOR
     // ============================================
 
     producer.requestStop();
     producerThread.join();
 
+    const std::size_t createdCount = producer.getCreatedCount();
+
+    const std::size_t producerRejected = producer.getRejectedCount();
+
     // ============================================
-    // DETENER EL DISPATCHER
+    // 5. DETENER DISPATCHER
     // ============================================
 
     dispatcher.requestStop(orderBook);
     dispatcherThread.join();
 
+    const std::size_t assignedCount = dispatcher.getAssignedCount();
+
+    const std::size_t dispatcherRejected = dispatcher.getRejectedCount();
+
+    const std::size_t dispatcherPending = dispatcher.getPendingCount();
+
     // ============================================
-    // DETENER LA FLOTA
+    // 6. DETENER FLOTA
     // ============================================
 
     fleet.requestStop();
     fleet.join();
 
     // ============================================
-    // FINALIZAR PEDIDOS QUE SIGUEN EN ORDERBOOK
+    // 7. CONTABILIZAR PEDIDOS DE FLEET
+    // ============================================
+
+    std::vector<CourierOrderResult> fleetResults = fleet.takeFinishedOrders();
+
+    const std::size_t fleetFinalizedCount = fleetResults.size();
+
+    std::size_t deliveredCount = 0;
+    std::size_t fleetPendingCount = 0;
+
+    std::unordered_set<std::string> fleetOrderIds;
+
+    for (const CourierOrderResult &result : fleetResults) {
+
+      const Order &order = result.order;
+
+      // Verificar que un pedido no aparezca
+      // dos veces en los resultados de la flota.
+      if (!fleetOrderIds.insert(order.orderId).second) {
+
+        throw std::logic_error("Pedido duplicado en Fleet: " + order.orderId);
+      }
+
+      // ----------------------------------------
+      // PEDIDO ENTREGADO
+      // ----------------------------------------
+
+      if (order.getState() == OrderState::Delivered) {
+
+        ++deliveredCount;
+
+        logger.logEvent({{"event", "orderDelivered"},
+                         {"order", order.orderId},
+                         {"courier", result.courierId},
+                         {"recordedAtShutdown", true}},
+                        clock.getSimulatedTimeMs());
+
+        // ----------------------------------------
+        // PEDIDO PENDIENTE EN MOTO
+        // ----------------------------------------
+
+      } else if (order.getState() == OrderState::Pending) {
+
+        ++fleetPendingCount;
+
+        logger.logEvent({{"event", "orderPending"},
+                         {"order", order.orderId},
+                         {"courier", result.courierId},
+                         {"source", "fleet"}},
+                        clock.getSimulatedTimeMs());
+
+      } else {
+
+        throw std::logic_error("Pedido sin estado final en Fleet: " +
+                               order.orderId);
+      }
+    }
+
+    // ============================================
+    // 8. RECUPERAR PENDIENTES DE ORDERBOOK
     // ============================================
 
     std::vector<Order> remainingOrders = orderBook.takeRemaining();
@@ -112,39 +187,86 @@ int main(int argc, char *argv[]) {
 
       if (!order.transitionTo(OrderState::Pending)) {
 
-        throw std::logic_error("No se pudo finalizar el pedido: " +
-                               order.orderId);
+        throw std::logic_error("No se pudo finalizar: " + order.orderId);
       }
 
-      logger.logEvent({{"event", "orderPending"}, {"order", order.orderId}},
+      logger.logEvent({{"event", "orderPending"},
+                       {"order", order.orderId},
+                       {"source", "orderBook"}},
                       clock.getSimulatedTimeMs());
 
       ++bookPendingCount;
     }
 
     // ============================================
-    // RESUMEN PROVISIONAL
+    // 9. CALCULAR RESULTADOS GLOBALES
     // ============================================
 
-    const std::size_t dispatcherPending = dispatcher.getPendingCount();
+    const std::size_t rejectedCount = producerRejected + dispatcherRejected;
 
-    const std::size_t totalPending = dispatcherPending + bookPendingCount;
+    const std::size_t pendingCount =
+        fleetPendingCount + dispatcherPending + bookPendingCount;
 
-    std::cout << "\n=== RESUMEN DISPATCHER ===\n";
+    const std::size_t totalFinalized =
+        deliveredCount + rejectedCount + pendingCount;
 
-    std::cout << "Pedidos asignados: " << dispatcher.getAssignedCount() << '\n';
+    // Todos los pedidos asignados deben haber
+    // terminado en Fleet.
+    const bool fleetComplete = fleetFinalizedCount == assignedCount;
 
-    std::cout << "Pedidos rechazados noCourier: "
-              << dispatcher.getRejectedCount() << '\n';
+    // La suma de los estados finales debe ser
+    // igual al total de pedidos creados.
+    const bool accountingComplete = totalFinalized == createdCount;
 
-    std::cout << "Pendientes en Dispatcher: " << dispatcherPending << '\n';
+    // ============================================
+    // 10. RESUMEN FINAL
+    // ============================================
 
-    std::cout << "Pendientes recuperados de OrderBook: " << bookPendingCount
-              << '\n';
+    std::cout << "\n=== RESUMEN FINAL EQUIPEGO ===\n";
 
-    std::cout << "Total pendientes sin asignar: " << totalPending << '\n';
+    std::cout << "Pedidos generados: " << createdCount << '\n';
+
+    std::cout << "Pedidos asignados a motos: " << assignedCount << '\n';
+
+    std::cout << "\n--- ESTADOS FINALES ---\n";
+
+    std::cout << "Entregados: " << deliveredCount << '\n';
+
+    std::cout << "Rechazados: " << rejectedCount << '\n';
+
+    std::cout << "Pendientes: " << pendingCount << '\n';
+
+    std::cout << "\n--- DETALLE DE PENDIENTES ---\n";
+
+    std::cout << "En motos: " << fleetPendingCount << '\n';
+
+    std::cout << "En Dispatcher: " << dispatcherPending << '\n';
+
+    std::cout << "En OrderBook: " << bookPendingCount << '\n';
+
+    std::cout << "\n--- AUDITORIA ---\n";
+
+    std::cout << "Total contabilizado: " << totalFinalized << '\n';
 
     std::cout << "Pedidos restantes en OrderBook: " << orderBook.size() << '\n';
+
+    std::cout << "Todos los asignados finalizados: "
+              << (fleetComplete ? "OK" : "ERROR") << '\n';
+
+    std::cout << "Balance global: " << (accountingComplete ? "OK" : "ERROR")
+              << '\n';
+
+    // ============================================
+    // 11. VALIDAR INTEGRIDAD
+    // ============================================
+
+    if (!fleetComplete || !accountingComplete) {
+
+      std::cerr << "ERROR: inconsistencia en "
+                << "la contabilidad de pedidos\n";
+
+      return 2;
+    }
 
     std::cout << "Flota detenida correctamente.\n";
 

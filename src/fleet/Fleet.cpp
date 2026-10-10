@@ -3,6 +3,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 // =====================================================
 // CONSTRUCTOR
@@ -23,7 +24,7 @@ Fleet::~Fleet() {
 }
 
 // =====================================================
-// INICIAR REPARTIDORES
+// INICIAR FLOTA
 // =====================================================
 
 void Fleet::start() {
@@ -40,8 +41,6 @@ void Fleet::start() {
     couriers.reserve(count);
     threads.reserve(count);
 
-    // Crear todos los actores compartiendo
-    // el mismo canal de notificaciones.
     for (std::size_t i = 0; i < count; ++i) {
 
       const std::string id = "c" + std::to_string(i);
@@ -50,7 +49,6 @@ void Fleet::start() {
                                                    clock, capacitySignal));
     }
 
-    // Iniciar un hilo independiente por actor.
     for (const auto &courier : couriers) {
       threads.emplace_back(&Courier::run, courier.get());
     }
@@ -67,17 +65,20 @@ void Fleet::start() {
 // =====================================================
 
 void Fleet::requestStop() {
+
   for (const auto &courier : couriers) {
     courier->requestStop();
   }
 }
 
 // =====================================================
-// ESPERAR FINALIZACION
+// ESPERAR HILOS
 // =====================================================
 
 void Fleet::join() {
+
   for (std::thread &worker : threads) {
+
     if (worker.joinable()) {
       worker.join();
     }
@@ -94,4 +95,39 @@ Courier &Fleet::at(std::size_t index) { return *couriers.at(index); }
 
 std::shared_ptr<CapacitySignal> Fleet::getCapacitySignal() const {
   return capacitySignal;
+}
+
+// =====================================================
+// NUEVO: RECOLECTAR ESTADOS FINALES
+// =====================================================
+
+std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
+
+  // No debemos recuperar resultados mientras
+  // los trabajadores continuan ejecutandose.
+  for (const std::thread &worker : threads) {
+
+    if (worker.joinable()) {
+      throw std::logic_error("Debes ejecutar Fleet::join() "
+                             "antes de recuperar pedidos");
+    }
+  }
+
+  std::vector<CourierOrderResult> results;
+
+  for (const auto &courier : couriers) {
+
+    const std::string courierId = courier->getId();
+
+    std::vector<Order> finished = courier->takeFinishedOrders();
+
+    for (Order &order : finished) {
+
+      // Transferir propiedad y conservar
+      // el identificador de la moto.
+      results.push_back(CourierOrderResult{courierId, std::move(order)});
+    }
+  }
+
+  return results;
 }
