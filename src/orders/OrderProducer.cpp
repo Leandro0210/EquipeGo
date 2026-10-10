@@ -1,11 +1,15 @@
+
 #include "orders/OrderProducer.hpp"
 
 #include "orders/Order.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <string>
 #include <utility>
+
+// =====================================================
+// CONSTRUCTOR
+// =====================================================
 
 OrderProducer::OrderProducer(const SimulationConfig &config,
                              OrderBook &orderBook, EventLogger &logger,
@@ -14,8 +18,14 @@ OrderProducer::OrderProducer(const SimulationConfig &config,
     : config(config), orderBook(orderBook), logger(logger), clock(clock),
       roadNetwork(roadNetwork), generator(config.orders) {}
 
+// =====================================================
+// HILO PRODUCTOR
+// =====================================================
+
 void OrderProducer::run() {
+
   while (true) {
+
     const int simulatedWaitMs = generator.nextIntervalMs();
 
     const double realWaitMs =
@@ -26,7 +36,7 @@ void OrderProducer::run() {
 
       const bool stopped = stopCv.wait_for(
           lock, std::chrono::duration<double, std::milli>(realWaitMs),
-          [this]() { return stopRequested; });
+          [this] { return stopRequested; });
 
       if (stopped) {
         break;
@@ -34,9 +44,15 @@ void OrderProducer::run() {
     }
 
     const long long creationTime = clock.getSimulatedTimeMs();
+
     const int burstSize = generator.nextBurstSize();
 
+    // ============================================
+    // CREAR PEDIDOS DE LA RAFAGA
+    // ============================================
+
     for (int i = 0; i < burstSize; ++i) {
+
       const std::size_t restaurantIndex =
           generator.nextRestaurantIndex(config.restaurants.size());
 
@@ -49,14 +65,16 @@ void OrderProducer::run() {
 
       const std::string orderId = "o" + std::to_string(nextOrderNumber++);
 
-      // Todo pedido primero se registra como creado.
+      // Registrar creacion.
       logger.logEvent({{"event", "orderCreated"},
                        {"order", orderId},
                        {"restaurant", restaurant.id}},
                       creationTime);
 
-      // Si desde el restaurante no existe ruta válida hacia el destino,
-      // el pedido termina inmediatamente como unreachable.
+      // ========================================
+      // RECHAZO: RUTA INALCANZABLE
+      // ========================================
+
       if (!roadNetwork.isReachable(restaurant.nodeId, deliveryNode.id)) {
 
         logger.logEvent({{"event", "orderRejected"},
@@ -64,23 +82,35 @@ void OrderProducer::run() {
                          {"reason", "unreachable"}},
                         creationTime);
 
+        ++rejectedCount;
         continue;
       }
 
+      // ========================================
+      // ENVIAR A ORDERBOOK
+      // ========================================
+
       Order order(orderId, restaurant.id, deliveryNode.id, creationTime);
 
-      // Si el libro ya está lleno, el pedido se rechaza por queueFull.
       if (!orderBook.tryAdd(std::move(order))) {
+
         logger.logEvent({{"event", "orderRejected"},
                          {"order", orderId},
                          {"reason", "queueFull"}},
                         creationTime);
+
+        ++rejectedCount;
       }
     }
   }
 }
 
+// =====================================================
+// APAGADO DEL PRODUCTOR
+// =====================================================
+
 void OrderProducer::requestStop() {
+
   {
     std::lock_guard<std::mutex> lock(stopMutex);
     stopRequested = true;

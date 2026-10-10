@@ -3,12 +3,21 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
+
+// =====================================================
+// CONSTRUCTOR
+// =====================================================
 
 Fleet::Fleet(const SimulationConfig &config, const RoadNetwork &roadNetwork,
              SimulationClock &clock)
-    : config(config), roadNetwork(roadNetwork), clock(clock) {}
+    : config(config), roadNetwork(roadNetwork), clock(clock),
+      capacitySignal(std::make_shared<CapacitySignal>()) {}
 
-// Asegura que ningun hilo quede activo al destruir Fleet.
+// =====================================================
+// DESTRUCTOR
+// =====================================================
+
 Fleet::~Fleet() {
   requestStop();
   join();
@@ -19,6 +28,7 @@ Fleet::~Fleet() {
 // =====================================================
 
 void Fleet::start() {
+
   if (started) {
     throw std::logic_error("La flota ya fue iniciada");
   }
@@ -31,22 +41,19 @@ void Fleet::start() {
     couriers.reserve(count);
     threads.reserve(count);
 
-    // 1. Crear todos los repartidores.
     for (std::size_t i = 0; i < count; ++i) {
+
       const std::string id = "c" + std::to_string(i);
 
-      couriers.push_back(
-          std::make_unique<Courier>(id, config, roadNetwork, clock));
+      couriers.push_back(std::make_unique<Courier>(id, config, roadNetwork,
+                                                   clock, capacitySignal));
     }
 
-    // 2. Crear un hilo por repartidor.
     for (const auto &courier : couriers) {
       threads.emplace_back(&Courier::run, courier.get());
     }
 
   } catch (...) {
-    // Si falla la creacion de algun hilo,
-    // detener y unir los que ya fueron iniciados.
     requestStop();
     join();
     throw;
@@ -54,21 +61,24 @@ void Fleet::start() {
 }
 
 // =====================================================
-// DETENER TODOS LOS REPARTIDORES
+// DETENER FLOTA
 // =====================================================
 
 void Fleet::requestStop() {
+
   for (const auto &courier : couriers) {
     courier->requestStop();
   }
 }
 
 // =====================================================
-// ESPERAR FINALIZACION DE HILOS
+// ESPERAR HILOS
 // =====================================================
 
 void Fleet::join() {
+
   for (std::thread &worker : threads) {
+
     if (worker.joinable()) {
       worker.join();
     }
@@ -82,3 +92,42 @@ void Fleet::join() {
 std::size_t Fleet::size() const noexcept { return couriers.size(); }
 
 Courier &Fleet::at(std::size_t index) { return *couriers.at(index); }
+
+std::shared_ptr<CapacitySignal> Fleet::getCapacitySignal() const {
+  return capacitySignal;
+}
+
+// =====================================================
+// NUEVO: RECOLECTAR ESTADOS FINALES
+// =====================================================
+
+std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
+
+  // No debemos recuperar resultados mientras
+  // los trabajadores continuan ejecutandose.
+  for (const std::thread &worker : threads) {
+
+    if (worker.joinable()) {
+      throw std::logic_error("Debes ejecutar Fleet::join() "
+                             "antes de recuperar pedidos");
+    }
+  }
+
+  std::vector<CourierOrderResult> results;
+
+  for (const auto &courier : couriers) {
+
+    const std::string courierId = courier->getId();
+
+    std::vector<Order> finished = courier->takeFinishedOrders();
+
+    for (Order &order : finished) {
+
+      // Transferir propiedad y conservar
+      // el identificador de la moto.
+      results.push_back(CourierOrderResult{courierId, std::move(order)});
+    }
+  }
+
+  return results;
+}
