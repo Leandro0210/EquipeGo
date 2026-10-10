@@ -4,21 +4,30 @@
 #include <stdexcept>
 #include <string>
 
+// =====================================================
+// CONSTRUCTOR
+// =====================================================
+
 Fleet::Fleet(const SimulationConfig &config, const RoadNetwork &roadNetwork,
              SimulationClock &clock)
-    : config(config), roadNetwork(roadNetwork), clock(clock) {}
+    : config(config), roadNetwork(roadNetwork), clock(clock),
+      capacitySignal(std::make_shared<CapacitySignal>()) {}
 
-// Asegura que ningun hilo quede activo al destruir Fleet.
+// =====================================================
+// DESTRUCTOR
+// =====================================================
+
 Fleet::~Fleet() {
   requestStop();
   join();
 }
 
 // =====================================================
-// INICIAR FLOTA
+// INICIAR REPARTIDORES
 // =====================================================
 
 void Fleet::start() {
+
   if (started) {
     throw std::logic_error("La flota ya fue iniciada");
   }
@@ -31,22 +40,22 @@ void Fleet::start() {
     couriers.reserve(count);
     threads.reserve(count);
 
-    // 1. Crear todos los repartidores.
+    // Crear todos los actores compartiendo
+    // el mismo canal de notificaciones.
     for (std::size_t i = 0; i < count; ++i) {
+
       const std::string id = "c" + std::to_string(i);
 
-      couriers.push_back(
-          std::make_unique<Courier>(id, config, roadNetwork, clock));
+      couriers.push_back(std::make_unique<Courier>(id, config, roadNetwork,
+                                                   clock, capacitySignal));
     }
 
-    // 2. Crear un hilo por repartidor.
+    // Iniciar un hilo independiente por actor.
     for (const auto &courier : couriers) {
       threads.emplace_back(&Courier::run, courier.get());
     }
 
   } catch (...) {
-    // Si falla la creacion de algun hilo,
-    // detener y unir los que ya fueron iniciados.
     requestStop();
     join();
     throw;
@@ -54,7 +63,7 @@ void Fleet::start() {
 }
 
 // =====================================================
-// DETENER TODOS LOS REPARTIDORES
+// DETENER FLOTA
 // =====================================================
 
 void Fleet::requestStop() {
@@ -64,7 +73,7 @@ void Fleet::requestStop() {
 }
 
 // =====================================================
-// ESPERAR FINALIZACION DE HILOS
+// ESPERAR FINALIZACION
 // =====================================================
 
 void Fleet::join() {
@@ -82,3 +91,7 @@ void Fleet::join() {
 std::size_t Fleet::size() const noexcept { return couriers.size(); }
 
 Courier &Fleet::at(std::size_t index) { return *couriers.at(index); }
+
+std::shared_ptr<CapacitySignal> Fleet::getCapacitySignal() const {
+  return capacitySignal;
+}

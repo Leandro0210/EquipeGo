@@ -3,6 +3,7 @@
 
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
+#include "fleet/CapacitySignal.hpp"
 #include "fleet/Courier.hpp"
 #include "map/RoadNetwork.hpp"
 
@@ -17,10 +18,10 @@ private:
   const RoadNetwork &roadNetwork;
   SimulationClock &clock;
 
-  // Objetos repartidores.
-  std::vector<std::unique_ptr<Courier>> couriers;
+  // Canal compartido de notificaciones.
+  std::shared_ptr<CapacitySignal> capacitySignal;
 
-  // Un hilo independiente por repartidor.
+  std::vector<std::unique_ptr<Courier>> couriers;
   std::vector<std::thread> threads;
 
   bool started = false;
@@ -31,20 +32,18 @@ public:
 
   ~Fleet();
 
-  // Evitar copias de una flota que posee hilos.
   Fleet(const Fleet &) = delete;
   Fleet &operator=(const Fleet &) = delete;
 
-  // Iniciar todos los repartidores.
   void start();
-
-  // Solicitar detener todos los hilos.
   void requestStop();
-
-  // Esperar la finalizacion de todos los hilos.
   void join();
 
   std::size_t size() const noexcept;
 
   Courier &at(std::size_t index);
+
+  // Lo utilizara el Dispatcher para esperar
+  // a que alguna moto libere capacidad.
+  std::shared_ptr<CapacitySignal> getCapacitySignal() const;
 };

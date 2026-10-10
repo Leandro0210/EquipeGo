@@ -3,12 +3,14 @@
 
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
+#include "fleet/CapacitySignal.hpp"
 #include "map/RoadNetwork.hpp"
 #include "orders/Order.hpp"
 
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -23,23 +25,25 @@ private:
   const RoadNetwork &roadNetwork;
   SimulationClock &clock;
 
+  // Canal de notificacion compartido con Fleet.
+  std::shared_ptr<CapacitySignal> capacitySignal;
+
   mutable std::mutex stateMutex;
   std::condition_variable workCv;
 
   std::string currentNode;
   CourierState state = CourierState::Idle;
 
-  // Comando temporal de navegacion manual.
   std::optional<std::string> destination;
   bool stopRequested = false;
 
-  // Pedidos aceptados con espacio reservado.
+  // Pedidos reservados en espera.
   std::deque<Order> assignedOrders;
 
-  // Pedido que se esta procesando.
+  // Pedido procesado actualmente.
   std::optional<Order> activeOrder;
 
-  // Pedidos cuyo recorrido no pudo completarse.
+  // Pedidos que no pudieron completar su recorrido.
   std::deque<Order> blockedOrders;
 
   // Pedidos entregados o pendientes al finalizar.
@@ -48,13 +52,14 @@ private:
   bool travelTo(const std::string &targetNode);
   bool processActiveOrder();
 
-  // Estas funciones requieren stateMutex adquirido.
   bool hasOrderIdLocked(const std::string &orderId) const;
+
   void finishPendingLocked();
 
 public:
   Courier(std::string id, const SimulationConfig &config,
-          const RoadNetwork &roadNetwork, SimulationClock &clock);
+          const RoadNetwork &roadNetwork, SimulationClock &clock,
+          std::shared_ptr<CapacitySignal> capacitySignal = nullptr);
 
   void run();
 
