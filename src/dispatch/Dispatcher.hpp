@@ -7,27 +7,41 @@
 #include "orders/Order.hpp"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
-// Cotizacion calculada para una moto candidata.
+// =====================================================
+// COTIZACION ETA DE UN REPARTIDOR
+// =====================================================
+
 struct EtaQuote {
   std::size_t courierIndex;
   std::string courierId;
   double etaSimulatedSeconds;
 };
 
-// Error individual de un calculo.
+// =====================================================
+// ERROR INDIVIDUAL DE COTIZACION
+// =====================================================
+
 struct QuoteFailure {
   std::string courierId;
   std::string reason;
 };
 
-// Resultados del conjunto de cotizaciones.
+// =====================================================
+// RESULTADO DE LAS COTIZACIONES
+// =====================================================
+
 struct QuoteBatch {
   std::vector<EtaQuote> quotes;
   std::vector<QuoteFailure> failures;
 };
+
+// =====================================================
+// DISPATCHER - DESPACHADOR DE PEDIDOS
+// =====================================================
 
 class Dispatcher {
 private:
@@ -39,7 +53,10 @@ public:
   Dispatcher(const SimulationConfig &config, const RoadNetwork &roadNetwork,
              Fleet &fleet);
 
-  // Calcula las ETA de los candidatos en paralelo.
-  // Por ahora espera todos los resultados.
+  // Calcular cotizaciones ETA simultaneamente.
   QuoteBatch quoteCandidates(const Order &order) const;
+
+  // Seleccionar el repartidor con menor ETA.
+  // Si ninguno acepta, devuelve nullopt.
+  std::optional<std::string> assignBestCourier(Order &order) const;
 };
