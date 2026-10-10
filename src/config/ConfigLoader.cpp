@@ -1,4 +1,4 @@
-#include "Config.hpp"
+#include "config/Config.hpp"
 
 #include <cmath>
 #include <filesystem>

@@ -40,12 +40,14 @@ endif()
 
 set(SOURCES
     src/main.cpp
-    src/ConfigLoader.cpp
-    src/Logger.cpp
-    src/OrderBook.cpp
-    src/OrderGenerator.cpp
-    src/OrderProducer.cpp
-    src/RoadNetwork.cpp
+    src/config/ConfigLoader.cpp
+    src/core/Logger.cpp
+    src/orders/OrderBook.cpp
+    src/orders/OrderGenerator.cpp
+    src/orders/OrderProducer.cpp
+    src/map/RoadNetwork.cpp
+    src/fleet/Courier.cpp
+    src/fleet/Fleet.cpp
 )
 
 # Target principal obligatorio
