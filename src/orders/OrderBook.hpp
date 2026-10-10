@@ -6,38 +6,52 @@
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
+
+class CapacitySignal;
 
 class OrderBook {
 private:
   std::size_t maxPending;
   std::deque<Order> orders;
 
-  // Protege el acceso concurrente a la cola.
   mutable std::mutex bookMutex;
-
-  // Despierta al Dispatcher cuando hay pedidos.
   std::condition_variable ordersCv;
 
   bool stopRequested = false;
 
+  // Pedidos extraidos pero todavia no resueltos.
+  std::size_t inFlight = 0;
+
+  // Notifica al Dispatcher cuando llega un pedido.
+  std::shared_ptr<CapacitySignal> wakeSignal;
+
 public:
   explicit OrderBook(std::size_t maxPending);
 
-  // Productor: insertar un nuevo pedido.
+  // Vincular el canal de notificaciones.
+  void setNotificationSignal(std::shared_ptr<CapacitySignal> signal);
+
+  // Productor: agregar un pedido.
   bool tryAdd(Order &&order);
 
-  // Consumidor: esperar y extraer en orden FIFO.
+  // Consumidor: esperar un pedido (bloqueante).
   std::optional<Order> waitAndTake();
 
-  // Detener nuevas inserciones y despertar consumidores.
+  // Consumidor: intentar sacar un pedido sin esperar.
+  std::optional<Order> tryTake();
+
+  // Avisar que un pedido extraido ya fue resuelto:
+  // Assigned, Rejected o Pending.
+  void completeTaken();
+
+  // Detener el libro.
   void requestStop();
 
-  // Recuperar todos los pedidos restantes.
-  // Utilizar despues de detener el OrderBook
-  // y finalizar el hilo consumidor.
+  // Recuperar pedidos al finalizar la simulacion.
   std::vector<Order> takeRemaining();
 
   std::size_t size() const;
