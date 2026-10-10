@@ -1,6 +1,7 @@
 
 #include "fleet/Courier.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <utility>
 
@@ -10,14 +11,13 @@ Courier::Courier(std::string id, const SimulationConfig &config,
       currentNode(config.fleet.startNode) {}
 
 // =====================================================
-// HILO PRINCIPAL DEL REPARTIDOR
+// HILO DEL REPARTIDOR
 // =====================================================
 
 void Courier::run() {
   while (true) {
     std::unique_lock<std::mutex> lock(stateMutex);
 
-    // Esperar hasta recibir un destino o una orden de parada.
     workCv.wait(lock,
                 [this]() { return destination.has_value() || stopRequested; });
 
@@ -30,7 +30,6 @@ void Courier::run() {
 
     state = CourierState::Moving;
 
-    // Liberar mutex mientras realizamos el recorrido.
     lock.unlock();
 
     travelTo(target);
@@ -46,7 +45,7 @@ void Courier::run() {
 }
 
 // =====================================================
-// MOVIMIENTO POR LOS SEGMENTOS DE LA RUTA
+// MOVIMIENTO POR CALLES
 // =====================================================
 
 bool Courier::travelTo(const std::string &targetNode) {
@@ -57,30 +56,22 @@ bool Courier::travelTo(const std::string &targetNode) {
     origin = currentNode;
   }
 
-  // Calcular ruta minima con Dijkstra.
   const auto route = roadNetwork.shortestRoute(origin, targetNode);
 
   if (!route.has_value()) {
     return false;
   }
 
-  // Convertir velocidad de km/h a m/s.
   const double speedMetersPerSecond = config.fleet.speedKmh / 3.6;
 
-  // Recorrer las calles de una en una.
   for (const RouteSegment &segment : route->segments) {
-
-    // Tiempo que tardaria en la simulacion.
     const double simulatedSeconds =
         segment.distanceMeters / speedMetersPerSecond;
 
-    // Convertir a tiempo real segun timeScale.
     const double realSeconds = simulatedSeconds / config.simulation.timeScale;
 
     std::unique_lock<std::mutex> lock(stateMutex);
 
-    // Esperar el tiempo de recorrido o despertar si
-    // solicitan detener la simulacion.
     const bool interrupted =
         workCv.wait_for(lock, std::chrono::duration<double>(realSeconds),
                         [this]() { return stopRequested; });
@@ -89,7 +80,6 @@ bool Courier::travelTo(const std::string &targetNode) {
       return false;
     }
 
-    // Actualizar posicion al llegar a la interseccion.
     currentNode = segment.to;
   }
 
@@ -97,7 +87,7 @@ bool Courier::travelTo(const std::string &targetNode) {
 }
 
 // =====================================================
-// ASIGNAR DESTINO
+// DESTINO DE NAVEGACION
 // =====================================================
 
 bool Courier::assignDestination(const std::string &nodeId) {
@@ -112,14 +102,86 @@ bool Courier::assignDestination(const std::string &nodeId) {
     destination = nodeId;
   }
 
-  // Despertar al hilo de esta moto.
   workCv.notify_one();
+  return true;
+}
+
+// =====================================================
+// ASIGNACION CONCURRENTE DE PEDIDOS
+// =====================================================
+
+bool Courier::tryAssignOrder(Order &&order) {
+  std::lock_guard<std::mutex> lock(stateMutex);
+
+  // No aceptar pedidos durante una parada o averia.
+  if (stopRequested || state == CourierState::Broken) {
+    return false;
+  }
+
+  const std::size_t capacity =
+      static_cast<std::size_t>(config.fleet.bagCapacity);
+
+  // Capacidad reservada: nunca exceder bagCapacity.
+  if (assignedOrders.size() >= capacity) {
+    return false;
+  }
+
+  // Solo se pueden asignar pedidos recien creados.
+  if (order.getState() != OrderState::Created) {
+    return false;
+  }
+
+  // Evitar el mismo identificador dos veces en esta moto.
+  const bool duplicate =
+      std::any_of(assignedOrders.begin(), assignedOrders.end(),
+                  [&order](const Order &existing) {
+                    return existing.orderId == order.orderId;
+                  });
+
+  if (duplicate) {
+    return false;
+  }
+
+  // Validar transicion antes de transferir el pedido.
+  if (!order.transitionTo(OrderState::Assigned)) {
+    return false;
+  }
+
+  // La propiedad del pedido pasa a esta moto.
+  assignedOrders.push_back(std::move(order));
 
   return true;
 }
 
 // =====================================================
-// DETENER REPARTIDOR
+// CONSULTAR CAPACIDAD RESERVADA
+// =====================================================
+
+std::size_t Courier::getReservedCount() const {
+  std::lock_guard<std::mutex> lock(stateMutex);
+  return assignedOrders.size();
+}
+
+// =====================================================
+// CONSULTAR ESTADO DE UN PEDIDO
+// =====================================================
+
+std::optional<OrderState>
+Courier::getAssignedOrderState(const std::string &orderId) const {
+
+  std::lock_guard<std::mutex> lock(stateMutex);
+
+  for (const Order &order : assignedOrders) {
+    if (order.orderId == orderId) {
+      return order.getState();
+    }
+  }
+
+  return std::nullopt;
+}
+
+// =====================================================
+// APAGADO
 // =====================================================
 
 void Courier::requestStop() {
@@ -128,12 +190,11 @@ void Courier::requestStop() {
     stopRequested = true;
   }
 
-  // Despertar incluso si esta viajando.
   workCv.notify_all();
 }
 
 // =====================================================
-// CONSULTAS PROTEGIDAS POR MUTEX
+// CONSULTAS
 // =====================================================
 
 std::string Courier::getId() const { return id; }

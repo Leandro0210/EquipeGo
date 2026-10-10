@@ -4,8 +4,11 @@
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
 #include "map/RoadNetwork.hpp"
+#include "orders/Order.hpp"
 
 #include <condition_variable>
+#include <cstddef>
+#include <deque>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -20,10 +23,8 @@ private:
   const RoadNetwork &roadNetwork;
   SimulationClock &clock;
 
-  // Protege el estado compartido del repartidor.
+  // Protege la posicion, el estado y los pedidos.
   mutable std::mutex stateMutex;
-
-  // Permite esperar trabajo sin consumir CPU.
   std::condition_variable workCv;
 
   std::string currentNode;
@@ -32,20 +33,31 @@ private:
   std::optional<std::string> destination;
   bool stopRequested = false;
 
-  // Movimiento por las calles de la ruta.
+  // Pedidos aceptados con capacidad reservada.
+  // Se procesaran en un siguiente miniavance.
+  std::deque<Order> assignedOrders;
+
   bool travelTo(const std::string &targetNode);
 
 public:
   Courier(std::string id, const SimulationConfig &config,
           const RoadNetwork &roadNetwork, SimulationClock &clock);
 
-  // Metodo ejecutado por el hilo del repartidor.
   void run();
 
-  // Asignar un destino si el repartidor esta disponible.
+  // Comando temporal de navegacion utilizado en pruebas.
   bool assignDestination(const std::string &nodeId);
 
-  // Solicitar la finalizacion del hilo.
+  // Reservar capacidad y aceptar un pedido.
+  // Devuelve false si no hay espacio o el pedido es invalido.
+  bool tryAssignOrder(Order &&order);
+
+  // Consultas seguras desde otros hilos.
+  std::size_t getReservedCount() const;
+
+  std::optional<OrderState>
+  getAssignedOrderState(const std::string &orderId) const;
+
   void requestStop();
 
   std::string getId() const;
