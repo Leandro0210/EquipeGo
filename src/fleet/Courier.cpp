@@ -11,13 +11,15 @@
 
 Courier::Courier(std::string id, const SimulationConfig &config,
                  const RoadNetwork &roadNetwork, SimulationClock &clock,
-                 std::shared_ptr<CapacitySignal> capacitySignal)
+                 std::shared_ptr<CapacitySignal> capacitySignal,
+                 std::shared_ptr<RestaurantManager> restaurantManager)
     : id(std::move(id)), config(config), roadNetwork(roadNetwork), clock(clock),
       capacitySignal(std::move(capacitySignal)),
+      restaurantManager(std::move(restaurantManager)),
       currentNode(config.fleet.startNode) {}
 
 // =====================================================
-// HILO PRINCIPAL DEL REPARTIDOR
+// HILO DEL REPARTIDOR
 // =====================================================
 
 void Courier::run() {
@@ -35,10 +37,7 @@ void Courier::run() {
       break;
     }
 
-    // ---------------------------------------------
-    // MOVIMIENTO MANUAL PARA PRUEBAS
-    // ---------------------------------------------
-
+    // Movimiento manual de pruebas anteriores.
     if (destination) {
       const std::string target = *destination;
       destination.reset();
@@ -60,17 +59,12 @@ void Courier::run() {
       continue;
     }
 
-    // ---------------------------------------------
-    // PROCESAMIENTO DE PEDIDOS
-    // ---------------------------------------------
-
+    // Tomar el siguiente pedido reservado.
     activeOrder.emplace(std::move(assignedOrders.front()));
 
     assignedOrders.pop_front();
     state = CourierState::Moving;
 
-    // El recorrido no mantiene bloqueado
-    // el mutex del estado de la moto.
     lock.unlock();
 
     const bool delivered = processActiveOrder();
@@ -85,7 +79,6 @@ void Courier::run() {
 
     if (!delivered && activeOrder) {
       blockedOrders.push_back(std::move(*activeOrder));
-
       activeOrder.reset();
     }
 
@@ -120,13 +113,36 @@ bool Courier::processActiveOrder() {
     return false;
   }
 
-  // ---------------------------------------------
-  // ETAPA 1: MOTO -> RESTAURANTE
-  // ---------------------------------------------
+  // =============================================
+  // ETAPA 1: VIAJAR AL RESTAURANTE
+  // =============================================
 
   if (!travelTo(restaurant->nodeId)) {
     return false;
   }
+
+  // =============================================
+  // ETAPA 2: OBTENER CUPO FIFO
+  // =============================================
+
+  std::optional<PickupGate::Permit> pickupPermit;
+
+  if (restaurantManager) {
+    const auto gate = restaurantManager->gateFor(restaurantId);
+
+    // Espera bloqueante hasta que:
+    // - haya un cupo y sea nuestro turno
+    // - o la flota solicite apagado
+    pickupPermit = gate->acquire();
+
+    if (!pickupPermit) {
+      return false;
+    }
+  }
+
+  // =============================================
+  // ETAPA 3: RECOGER PEDIDO
+  // =============================================
 
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -137,16 +153,22 @@ bool Courier::processActiveOrder() {
     }
   }
 
-  // Los tiempos de preparacion y cupos de
-  // recogida se incorporaran en DP.5.
+  // El cupo se libera al completar la recogida.
+  // En el siguiente miniavance agregaremos
+  // el tiempo simulado de preparacion.
+  pickupPermit.reset();
 
-  // ---------------------------------------------
-  // ETAPA 2: RESTAURANTE -> CLIENTE
-  // ---------------------------------------------
+  // =============================================
+  // ETAPA 4: VIAJAR AL CLIENTE
+  // =============================================
 
   if (!travelTo(deliveryNode)) {
     return false;
   }
+
+  // =============================================
+  // ETAPA 5: ENTREGAR PEDIDO
+  // =============================================
 
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -161,12 +183,7 @@ bool Courier::processActiveOrder() {
     activeOrder.reset();
   }
 
-  // ---------------------------------------------
-  // NUEVO: NOTIFICAR CAPACIDAD LIBERADA
-  // ---------------------------------------------
-
-  // El mutex del repartidor ya fue liberado.
-  // Ahora podemos despertar al Dispatcher.
+  // Notificar capacidad liberada al Dispatcher.
   if (capacitySignal) {
     capacitySignal->notifyChange();
   }
@@ -175,7 +192,7 @@ bool Courier::processActiveOrder() {
 }
 
 // =====================================================
-// MOVIMIENTO SOBRE LA RED DE CALLES
+// MOVIMIENTO SOBRE LAS CALLES
 // =====================================================
 
 bool Courier::travelTo(const std::string &targetNode) {
@@ -237,12 +254,10 @@ bool Courier::assignDestination(const std::string &nodeId) {
 }
 
 // =====================================================
-// VERIFICAR ID DUPLICADO
-// Requiere stateMutex adquirido.
+// VERIFICAR PEDIDO DUPLICADO
 // =====================================================
 
 bool Courier::hasOrderIdLocked(const std::string &orderId) const {
-
   if (activeOrder && activeOrder->orderId == orderId) {
     return true;
   }
@@ -262,7 +277,6 @@ bool Courier::hasOrderIdLocked(const std::string &orderId) const {
 // =====================================================
 
 bool Courier::tryAssignOrder(Order &&order) {
-
   if (order.getState() != OrderState::Created) {
     return false;
   }
@@ -303,12 +317,10 @@ bool Courier::tryAssignOrder(Order &&order) {
 }
 
 // =====================================================
-// MARCAR PEDIDOS PENDIENTES
-// Requiere stateMutex adquirido.
+// CIERRE DE PEDIDOS PENDIENTES
 // =====================================================
 
 void Courier::finishPendingLocked() {
-
   if (activeOrder) {
     activeOrder->transitionTo(OrderState::Pending);
 
@@ -351,7 +363,6 @@ std::size_t Courier::getFinishedCount() const {
 
 std::optional<OrderState>
 Courier::getAssignedOrderState(const std::string &orderId) const {
-
   std::lock_guard<std::mutex> lock(stateMutex);
 
   if (activeOrder && activeOrder->orderId == orderId) {
@@ -359,7 +370,6 @@ Courier::getAssignedOrderState(const std::string &orderId) const {
   }
 
   for (const auto *list : {&assignedOrders, &blockedOrders, &finishedOrders}) {
-
     for (const Order &order : *list) {
       if (order.orderId == orderId) {
         return order.getState();
@@ -384,7 +394,7 @@ void Courier::requestStop() {
 }
 
 // =====================================================
-// INFORMACION DEL REPARTIDOR
+// DATOS DEL REPARTIDOR
 // =====================================================
 
 std::string Courier::getId() const { return id; }

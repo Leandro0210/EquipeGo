@@ -6,6 +6,7 @@
 #include "fleet/CapacitySignal.hpp"
 #include "map/RoadNetwork.hpp"
 #include "orders/Order.hpp"
+#include "restaurants/RestaurantManager.hpp"
 
 #include <condition_variable>
 #include <cstddef>
@@ -29,6 +30,9 @@ private:
 
   std::shared_ptr<CapacitySignal> capacitySignal;
 
+  // Compartido con todas las motos de Fleet.
+  std::shared_ptr<RestaurantManager> restaurantManager;
+
   mutable std::mutex stateMutex;
   std::condition_variable workCv;
 
@@ -38,16 +42,9 @@ private:
   std::optional<std::string> destination;
   bool stopRequested = false;
 
-  // Pedidos esperando procesamiento.
   std::deque<Order> assignedOrders;
-
-  // Pedido actualmente en movimiento.
   std::optional<Order> activeOrder;
-
-  // Pedidos que no pudieron completar su ruta.
   std::deque<Order> blockedOrders;
-
-  // Pedidos entregados o pendientes al detener.
   std::deque<Order> finishedOrders;
 
   bool travelTo(const std::string &targetNode);
@@ -58,9 +55,12 @@ private:
   void finishPendingLocked();
 
 public:
+  // Parametros opcionales para conservar
+  // compatibilidad con pruebas anteriores.
   Courier(std::string id, const SimulationConfig &config,
           const RoadNetwork &roadNetwork, SimulationClock &clock,
-          std::shared_ptr<CapacitySignal> capacitySignal = nullptr);
+          std::shared_ptr<CapacitySignal> capacitySignal = nullptr,
+          std::shared_ptr<RestaurantManager> restaurantManager = nullptr);
 
   void run();
 
@@ -79,23 +79,15 @@ public:
   std::string getCurrentNode() const;
   CourierState getState() const;
 
-  // =================================================
-  // NUEVO: RECUPERAR RESULTADOS FINALES
-  // =================================================
-
-  // Fleet lo llamara despues de join().
-  // Cada pedido se mueve una sola vez.
+  // Recuperar pedidos despues de Fleet::join().
   std::vector<Order> takeFinishedOrders() {
-
     std::lock_guard<std::mutex> lock(stateMutex);
 
     std::vector<Order> results;
     results.reserve(finishedOrders.size());
 
     while (!finishedOrders.empty()) {
-
       results.push_back(std::move(finishedOrders.front()));
-
       finishedOrders.pop_front();
     }
 

@@ -5,18 +5,12 @@
 #include <string>
 #include <utility>
 
-// =====================================================
-// CONSTRUCTOR
-// =====================================================
-
 Fleet::Fleet(const SimulationConfig &config, const RoadNetwork &roadNetwork,
              SimulationClock &clock)
     : config(config), roadNetwork(roadNetwork), clock(clock),
-      capacitySignal(std::make_shared<CapacitySignal>()) {}
-
-// =====================================================
-// DESTRUCTOR
-// =====================================================
+      capacitySignal(std::make_shared<CapacitySignal>()),
+      restaurantManager(
+          std::make_shared<RestaurantManager>(config.restaurants)) {}
 
 Fleet::~Fleet() {
   requestStop();
@@ -28,7 +22,6 @@ Fleet::~Fleet() {
 // =====================================================
 
 void Fleet::start() {
-
   if (started) {
     throw std::logic_error("La flota ya fue iniciada");
   }
@@ -42,11 +35,12 @@ void Fleet::start() {
     threads.reserve(count);
 
     for (std::size_t i = 0; i < count; ++i) {
-
       const std::string id = "c" + std::to_string(i);
 
-      couriers.push_back(std::make_unique<Courier>(id, config, roadNetwork,
-                                                   clock, capacitySignal));
+      // Todas las motos reciben el MISMO
+      // administrador de restaurantes.
+      couriers.push_back(std::make_unique<Courier>(
+          id, config, roadNetwork, clock, capacitySignal, restaurantManager));
     }
 
     for (const auto &courier : couriers) {
@@ -61,24 +55,22 @@ void Fleet::start() {
 }
 
 // =====================================================
-// DETENER FLOTA
+// APAGADO ORDENADO
 // =====================================================
 
 void Fleet::requestStop() {
+  // Primero despertar filas de restaurantes.
+  restaurantManager->requestStop();
 
+  // Despues interrumpir recorridos y esperas
+  // de los repartidores.
   for (const auto &courier : couriers) {
     courier->requestStop();
   }
 }
 
-// =====================================================
-// ESPERAR HILOS
-// =====================================================
-
 void Fleet::join() {
-
   for (std::thread &worker : threads) {
-
     if (worker.joinable()) {
       worker.join();
     }
@@ -97,16 +89,17 @@ std::shared_ptr<CapacitySignal> Fleet::getCapacitySignal() const {
   return capacitySignal;
 }
 
+std::shared_ptr<RestaurantManager> Fleet::getRestaurantManager() const {
+  return restaurantManager;
+}
+
 // =====================================================
-// NUEVO: RECOLECTAR ESTADOS FINALES
+// RESULTADOS FINALES DE LA FLOTA
 // =====================================================
 
 std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
 
-  // No debemos recuperar resultados mientras
-  // los trabajadores continuan ejecutandose.
   for (const std::thread &worker : threads) {
-
     if (worker.joinable()) {
       throw std::logic_error("Debes ejecutar Fleet::join() "
                              "antes de recuperar pedidos");
@@ -116,15 +109,11 @@ std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
   std::vector<CourierOrderResult> results;
 
   for (const auto &courier : couriers) {
-
     const std::string courierId = courier->getId();
 
     std::vector<Order> finished = courier->takeFinishedOrders();
 
     for (Order &order : finished) {
-
-      // Transferir propiedad y conservar
-      // el identificador de la moto.
       results.push_back(CourierOrderResult{courierId, std::move(order)});
     }
   }
