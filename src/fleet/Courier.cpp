@@ -1,5 +1,6 @@
 
 #include "fleet/Courier.hpp"
+#include "restaurants/PreparationTime.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -19,7 +20,7 @@ Courier::Courier(std::string id, const SimulationConfig &config,
       currentNode(config.fleet.startNode) {}
 
 // =====================================================
-// HILO DEL REPARTIDOR
+// HILO PRINCIPAL
 // =====================================================
 
 void Courier::run() {
@@ -37,7 +38,7 @@ void Courier::run() {
       break;
     }
 
-    // Movimiento manual de pruebas anteriores.
+    // Movimiento manual para pruebas.
     if (destination) {
       const std::string target = *destination;
       destination.reset();
@@ -59,7 +60,6 @@ void Courier::run() {
       continue;
     }
 
-    // Tomar el siguiente pedido reservado.
     activeOrder.emplace(std::move(assignedOrders.front()));
 
     assignedOrders.pop_front();
@@ -79,6 +79,7 @@ void Courier::run() {
 
     if (!delivered && activeOrder) {
       blockedOrders.push_back(std::move(*activeOrder));
+
       activeOrder.reset();
     }
 
@@ -93,6 +94,8 @@ void Courier::run() {
 bool Courier::processActiveOrder() {
   std::string restaurantId;
   std::string deliveryNode;
+  std::string orderId;
+  long long creationTime = 0;
 
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -103,6 +106,8 @@ bool Courier::processActiveOrder() {
 
     restaurantId = activeOrder->restauranteId;
     deliveryNode = activeOrder->deliveryNodeId;
+    orderId = activeOrder->orderId;
+    creationTime = activeOrder->time;
   }
 
   const auto restaurant = std::find_if(
@@ -122,7 +127,46 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 2: OBTENER CUPO FIFO
+  // ETAPA 2: ESPERAR LA PREPARACION
+  // =============================================
+
+  const long long preparationMs =
+      preparationDurationMs(*restaurant, orderId, config.orders.seed);
+
+  // La preparacion comienza cuando nace
+  // el pedido, NO cuando llega la moto.
+  const long long readyAt = creationTime + preparationMs;
+
+  {
+    std::unique_lock<std::mutex> lock(stateMutex);
+
+    while (!stopRequested) {
+      const long long remainingSimulatedMs =
+          readyAt - clock.getSimulatedTimeMs();
+
+      // La comida ya esta preparada.
+      if (remainingSimulatedMs <= 0) {
+        break;
+      }
+
+      // Convertir tiempo simulado a real.
+      const double realWaitMs = static_cast<double>(remainingSimulatedMs) /
+                                config.simulation.timeScale;
+
+      // Espera bloqueante e interrumpible.
+      // No hay sondeo activo.
+      workCv.wait_for(lock,
+                      std::chrono::duration<double, std::milli>(realWaitMs),
+                      [this] { return stopRequested; });
+    }
+
+    if (stopRequested) {
+      return false;
+    }
+  }
+
+  // =============================================
+  // ETAPA 3: OBTENER CUPO FIFO
   // =============================================
 
   std::optional<PickupGate::Permit> pickupPermit;
@@ -130,9 +174,6 @@ bool Courier::processActiveOrder() {
   if (restaurantManager) {
     const auto gate = restaurantManager->gateFor(restaurantId);
 
-    // Espera bloqueante hasta que:
-    // - haya un cupo y sea nuestro turno
-    // - o la flota solicite apagado
     pickupPermit = gate->acquire();
 
     if (!pickupPermit) {
@@ -141,7 +182,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 3: RECOGER PEDIDO
+  // ETAPA 4: RECOGER PEDIDO
   // =============================================
 
   {
@@ -153,13 +194,10 @@ bool Courier::processActiveOrder() {
     }
   }
 
-  // El cupo se libera al completar la recogida.
-  // En el siguiente miniavance agregaremos
-  // el tiempo simulado de preparacion.
   pickupPermit.reset();
 
   // =============================================
-  // ETAPA 4: VIAJAR AL CLIENTE
+  // ETAPA 5: VIAJAR AL CLIENTE
   // =============================================
 
   if (!travelTo(deliveryNode)) {
@@ -167,7 +205,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 5: ENTREGAR PEDIDO
+  // ETAPA 6: ENTREGAR
   // =============================================
 
   {
@@ -183,7 +221,6 @@ bool Courier::processActiveOrder() {
     activeOrder.reset();
   }
 
-  // Notificar capacidad liberada al Dispatcher.
   if (capacitySignal) {
     capacitySignal->notifyChange();
   }
@@ -192,7 +229,7 @@ bool Courier::processActiveOrder() {
 }
 
 // =====================================================
-// MOVIMIENTO SOBRE LAS CALLES
+// MOVIMIENTO POR LAS CALLES
 // =====================================================
 
 bool Courier::travelTo(const std::string &targetNode) {
@@ -212,6 +249,7 @@ bool Courier::travelTo(const std::string &targetNode) {
   const double speedMetersPerSecond = config.fleet.speedKmh / 3.6;
 
   for (const RouteSegment &segment : route->segments) {
+
     const double simulatedSeconds =
         segment.distanceMeters / speedMetersPerSecond;
 
@@ -394,7 +432,7 @@ void Courier::requestStop() {
 }
 
 // =====================================================
-// DATOS DEL REPARTIDOR
+// INFORMACION DEL REPARTIDOR
 // =====================================================
 
 std::string Courier::getId() const { return id; }

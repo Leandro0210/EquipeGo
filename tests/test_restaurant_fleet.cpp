@@ -17,14 +17,11 @@ using RealClock = std::chrono::steady_clock;
 bool waitForTwoDeliveries(Fleet &fleet, const std::string &firstId,
                           const std::string &secondId) {
   auto signal = fleet.getCapacitySignal();
-
   std::atomic<bool> cancelled{false};
 
   const auto deadline = RealClock::now() + std::chrono::seconds(5);
 
   while (RealClock::now() < deadline) {
-    // Version ANTES de leer los estados:
-    // evitamos perder notificaciones.
     const auto version = signal->version();
 
     const auto a = fleet.at(0).getAssignedOrderState(firstId);
@@ -53,13 +50,16 @@ int main(int argc, char *argv[]) {
   config.fleet.startNode = "n8";
   config.simulation.timeScale = 60.0;
 
-  // San Martino esta en n8.
-  // Para el test dejamos un solo cupo.
   bool foundRestaurant = false;
 
   for (Restaurant &restaurant : config.restaurants) {
     if (restaurant.id == "r3") {
       restaurant.pickupSlots = 1;
+
+      // Este test evalua cupos, no cocina.
+      restaurant.prepTimeMinMs = 0;
+      restaurant.prepTimeMaxMs = 0;
+
       foundRestaurant = true;
     }
   }
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
   bool shutdownOk = false;
 
   // =============================================
-  // TEST 1: DOS MOTOS COMPARTEN UN CUPO
+  // TEST 1: CUPOS COMPARTIDOS
   // =============================================
 
   {
@@ -90,7 +90,6 @@ int main(int argc, char *argv[]) {
     const bool sharedManager = manager->size() == config.restaurants.size() &&
                                gate == manager->gateFor("r3");
 
-    // Ocupar el cupo para forzar la fila.
     auto blocker = gate->acquire();
 
     fleet.start();
@@ -104,8 +103,6 @@ int main(int argc, char *argv[]) {
     const bool bothWaiting = gate->waitForWaitingCount(
         2, RealClock::now() + std::chrono::seconds(5));
 
-    // Mientras el cupo este ocupado,
-    // ninguno puede pasar a PickedUp.
     const auto stateA = fleet.at(0).getAssignedOrderState("dp5_a");
 
     const auto stateB = fleet.at(1).getAssignedOrderState("dp5_b");
@@ -138,11 +135,12 @@ int main(int argc, char *argv[]) {
   }
 
   // =============================================
-  // TEST 2: APAGADO CON MOTOS EN FILA
+  // TEST 2: APAGADO EN FILA
   // =============================================
 
   {
     Fleet fleet(config, network, clock);
+
     auto gate = fleet.getRestaurantManager()->gateFor("r3");
 
     auto blocker = gate->acquire();
@@ -158,7 +156,6 @@ int main(int argc, char *argv[]) {
     const bool bothWaiting = gate->waitForWaitingCount(
         2, RealClock::now() + std::chrono::seconds(5));
 
-    // Debe despertar a ambas motos.
     fleet.requestStop();
     fleet.join();
 
@@ -177,10 +174,6 @@ int main(int argc, char *argv[]) {
     shutdownOk = a && b && bothWaiting && results.size() == 2 && pending == 2 &&
                  gate->waitingCount() == 0 && gate->occupied() == 0;
   }
-
-  // =============================================
-  // RESULTADOS
-  // =============================================
 
   std::cout << "=== TEST DP5 RESTAURANT FLEET ===\n";
 
