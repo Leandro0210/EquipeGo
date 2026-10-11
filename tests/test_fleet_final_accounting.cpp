@@ -14,7 +14,6 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-
   SimulationConfig config;
 
   if (!loadAndValidateConfig(argc, argv, config)) {
@@ -26,6 +25,15 @@ int main(int argc, char *argv[]) {
   config.fleet.speedKmh = 1.0;
   config.simulation.timeScale = 1.0;
 
+  // Este test evalua contabilidad final.
+  // Evitar que dependa de la cocina.
+  for (Restaurant &restaurant : config.restaurants) {
+    if (restaurant.id == "r3") {
+      restaurant.prepTimeMinMs = 0;
+      restaurant.prepTimeMaxMs = 0;
+    }
+  }
+
   SimulationClock clock;
   clock.start(config.simulation.timeScale);
 
@@ -35,15 +43,10 @@ int main(int argc, char *argv[]) {
   fleet.start();
 
   auto signal = fleet.getCapacitySignal();
-
   const auto beforeDelivery = signal->version();
 
-  // Pedido rapido: restaurante y entrega
-  // estan en el mismo nodo n8.
   Order fastOrder("dp4_delivered", "r3", "n8", clock.getSimulatedTimeMs());
 
-  // Pedido lento: el repartidor debe
-  // recorrer una distancia considerable.
   Order slowOrder("dp4_pending", "r3", "n23", clock.getSimulatedTimeMs());
 
   const bool firstAccepted = fleet.at(0).tryAssignOrder(std::move(fastOrder));
@@ -51,7 +54,6 @@ int main(int argc, char *argv[]) {
   const bool secondAccepted = fleet.at(1).tryAssignOrder(std::move(slowOrder));
 
   if (!firstAccepted || !secondAccepted) {
-
     fleet.requestStop();
     fleet.join();
 
@@ -62,8 +64,6 @@ int main(int argc, char *argv[]) {
 
   std::atomic<bool> stopRequested{false};
 
-  // Esperar a que el primer repartidor
-  // libere capacidad tras la entrega.
   const bool notified = signal->waitUntilChange(
       beforeDelivery,
       std::chrono::steady_clock::now() + std::chrono::seconds(5),
@@ -74,20 +74,16 @@ int main(int argc, char *argv[]) {
   const bool deliveredBeforeStop =
       firstState && *firstState == OrderState::Delivered;
 
-  // Interrumpir la entrega lenta.
   fleet.requestStop();
   fleet.join();
 
-  // Recuperar los pedidos ya finalizados.
-  std::vector<CourierOrderResult> results = fleet.takeFinishedOrders();
+  auto results = fleet.takeFinishedOrders();
 
   std::size_t delivered = 0;
   std::size_t pending = 0;
-
   std::set<std::string> ids;
 
   for (const auto &result : results) {
-
     ids.insert(result.order.orderId);
 
     if (result.order.getState() == OrderState::Delivered) {
@@ -99,8 +95,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Una segunda lectura no debe volver
-  // a devolver los mismos pedidos.
   const auto secondCollection = fleet.takeFinishedOrders();
 
   const bool correct = notified && deliveredBeforeStop && results.size() == 2 &&
@@ -120,14 +114,8 @@ int main(int argc, char *argv[]) {
   std::cout << "Segunda recoleccion vacia: "
             << (secondCollection.empty() ? "SI" : "NO") << '\n';
 
-  if (!correct) {
+  std::cout << "FLEET FINAL ACCOUNTING TEST: " << (correct ? "OK" : "ERROR")
+            << '\n';
 
-    std::cerr << "FLEET FINAL ACCOUNTING TEST: ERROR\n";
-
-    return 1;
-  }
-
-  std::cout << "FLEET FINAL ACCOUNTING TEST: OK\n";
-
-  return 0;
+  return correct ? 0 : 1;
 }

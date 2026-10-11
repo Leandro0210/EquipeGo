@@ -1,9 +1,18 @@
 
 #include "fleet/Courier.hpp"
+#include "restaurants/PreparationTime.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <utility>
+
+namespace {
+
+// Tiempo fijo de entrega en restaurante.
+// Son milisegundos SIMULADOS.
+constexpr long long kPickupHandoffMs = 2000;
+
+} // namespace
 
 // =====================================================
 // CONSTRUCTOR
@@ -11,13 +20,15 @@
 
 Courier::Courier(std::string id, const SimulationConfig &config,
                  const RoadNetwork &roadNetwork, SimulationClock &clock,
-                 std::shared_ptr<CapacitySignal> capacitySignal)
+                 std::shared_ptr<CapacitySignal> capacitySignal,
+                 std::shared_ptr<RestaurantManager> restaurantManager)
     : id(std::move(id)), config(config), roadNetwork(roadNetwork), clock(clock),
       capacitySignal(std::move(capacitySignal)),
+      restaurantManager(std::move(restaurantManager)),
       currentNode(config.fleet.startNode) {}
 
 // =====================================================
-// HILO PRINCIPAL DEL REPARTIDOR
+// HILO PRINCIPAL
 // =====================================================
 
 void Courier::run() {
@@ -35,10 +46,7 @@ void Courier::run() {
       break;
     }
 
-    // ---------------------------------------------
-    // MOVIMIENTO MANUAL PARA PRUEBAS
-    // ---------------------------------------------
-
+    // Movimiento manual.
     if (destination) {
       const std::string target = *destination;
       destination.reset();
@@ -60,17 +68,12 @@ void Courier::run() {
       continue;
     }
 
-    // ---------------------------------------------
-    // PROCESAMIENTO DE PEDIDOS
-    // ---------------------------------------------
-
+    // Procesar siguiente pedido.
     activeOrder.emplace(std::move(assignedOrders.front()));
 
     assignedOrders.pop_front();
     state = CourierState::Moving;
 
-    // El recorrido no mantiene bloqueado
-    // el mutex del estado de la moto.
     lock.unlock();
 
     const bool delivered = processActiveOrder();
@@ -100,6 +103,8 @@ void Courier::run() {
 bool Courier::processActiveOrder() {
   std::string restaurantId;
   std::string deliveryNode;
+  std::string orderId;
+  long long creationTime = 0;
 
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -110,6 +115,8 @@ bool Courier::processActiveOrder() {
 
     restaurantId = activeOrder->restauranteId;
     deliveryNode = activeOrder->deliveryNodeId;
+    orderId = activeOrder->orderId;
+    creationTime = activeOrder->time;
   }
 
   const auto restaurant = std::find_if(
@@ -120,33 +127,118 @@ bool Courier::processActiveOrder() {
     return false;
   }
 
-  // ---------------------------------------------
-  // ETAPA 1: MOTO -> RESTAURANTE
-  // ---------------------------------------------
+  // =============================================
+  // ETAPA 1: VIAJAR AL RESTAURANTE
+  // =============================================
 
   if (!travelTo(restaurant->nodeId)) {
     return false;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(stateMutex);
+  // =============================================
+  // ETAPA 2: ESPERAR PREPARACION
+  // =============================================
 
-    if (stopRequested || !activeOrder ||
-        !activeOrder->transitionTo(OrderState::PickedUp)) {
+  const long long preparationMs =
+      preparationDurationMs(*restaurant, orderId, config.orders.seed);
+
+  // La comida comienza a prepararse
+  // desde la creacion del pedido.
+  const long long readyAt = creationTime + preparationMs;
+
+  {
+    std::unique_lock<std::mutex> lock(stateMutex);
+
+    while (!stopRequested) {
+      const long long remainingSimulatedMs =
+          readyAt - clock.getSimulatedTimeMs();
+
+      if (remainingSimulatedMs <= 0) {
+        break;
+      }
+
+      const double realWaitMs = static_cast<double>(remainingSimulatedMs) /
+                                config.simulation.timeScale;
+
+      // Espera interrumpible sin busy waiting.
+      workCv.wait_for(lock,
+                      std::chrono::duration<double, std::milli>(realWaitMs),
+                      [this] { return stopRequested; });
+    }
+
+    if (stopRequested) {
       return false;
     }
   }
 
-  // Los tiempos de preparacion y cupos de
-  // recogida se incorporaran en DP.5.
+  // =============================================
+  // ETAPA 3: OBTENER CUPO FIFO
+  // =============================================
 
-  // ---------------------------------------------
-  // ETAPA 2: RESTAURANTE -> CLIENTE
-  // ---------------------------------------------
+  std::optional<PickupGate::Permit> pickupPermit;
+
+  if (restaurantManager) {
+    const auto gate = restaurantManager->gateFor(restaurantId);
+
+    pickupPermit = gate->acquire();
+
+    if (!pickupPermit) {
+      return false;
+    }
+  }
+
+  // =============================================
+  // ETAPA 4: ENTREGA DE COMIDA EN RESTAURANTE
+  // =============================================
+
+  {
+    // Mientras el permiso exista, el restaurante
+    // tiene un cupo ocupado por esta moto.
+    std::unique_lock<std::mutex> lock(stateMutex);
+
+    if (stopRequested || !activeOrder) {
+      return false;
+    }
+
+    const double realHandoffMs =
+        static_cast<double>(kPickupHandoffMs) / config.simulation.timeScale;
+
+    // Simular el tiempo de entrega de comida.
+    // workCv libera temporalmente stateMutex.
+    // pickupPermit permanece adquirido.
+    const bool interrupted = workCv.wait_for(
+        lock, std::chrono::duration<double, std::milli>(realHandoffMs),
+        [this] { return stopRequested; });
+
+    if (interrupted || stopRequested || !activeOrder) {
+      return false;
+    }
+
+    // Solo ahora se completa la recogida.
+    if (!activeOrder->transitionTo(OrderState::PickedUp)) {
+      return false;
+    }
+  }
+
+  // =============================================
+  // ETAPA 5: LIBERAR CUPO DEL RESTAURANTE
+  // =============================================
+
+  // RAII libera el cupo incluso si se retorna
+  // anticipadamente durante la espera.
+  pickupPermit.reset();
+
+  // =============================================
+  // ETAPA 6: VIAJAR AL CLIENTE
+  // =============================================
 
   if (!travelTo(deliveryNode)) {
     return false;
   }
+
+  // =============================================
+  // ETAPA 7: ENTREGAR PEDIDO
+  // =============================================
 
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -161,12 +253,7 @@ bool Courier::processActiveOrder() {
     activeOrder.reset();
   }
 
-  // ---------------------------------------------
-  // NUEVO: NOTIFICAR CAPACIDAD LIBERADA
-  // ---------------------------------------------
-
-  // El mutex del repartidor ya fue liberado.
-  // Ahora podemos despertar al Dispatcher.
+  // Avisar al Dispatcher que hay capacidad.
   if (capacitySignal) {
     capacitySignal->notifyChange();
   }
@@ -195,6 +282,7 @@ bool Courier::travelTo(const std::string &targetNode) {
   const double speedMetersPerSecond = config.fleet.speedKmh / 3.6;
 
   for (const RouteSegment &segment : route->segments) {
+
     const double simulatedSeconds =
         segment.distanceMeters / speedMetersPerSecond;
 
@@ -237,12 +325,10 @@ bool Courier::assignDestination(const std::string &nodeId) {
 }
 
 // =====================================================
-// VERIFICAR ID DUPLICADO
-// Requiere stateMutex adquirido.
+// VERIFICAR PEDIDO DUPLICADO
 // =====================================================
 
 bool Courier::hasOrderIdLocked(const std::string &orderId) const {
-
   if (activeOrder && activeOrder->orderId == orderId) {
     return true;
   }
@@ -262,7 +348,6 @@ bool Courier::hasOrderIdLocked(const std::string &orderId) const {
 // =====================================================
 
 bool Courier::tryAssignOrder(Order &&order) {
-
   if (order.getState() != OrderState::Created) {
     return false;
   }
@@ -303,12 +388,10 @@ bool Courier::tryAssignOrder(Order &&order) {
 }
 
 // =====================================================
-// MARCAR PEDIDOS PENDIENTES
-// Requiere stateMutex adquirido.
+// CIERRE DE PEDIDOS PENDIENTES
 // =====================================================
 
 void Courier::finishPendingLocked() {
-
   if (activeOrder) {
     activeOrder->transitionTo(OrderState::Pending);
 
@@ -351,7 +434,6 @@ std::size_t Courier::getFinishedCount() const {
 
 std::optional<OrderState>
 Courier::getAssignedOrderState(const std::string &orderId) const {
-
   std::lock_guard<std::mutex> lock(stateMutex);
 
   if (activeOrder && activeOrder->orderId == orderId) {
@@ -359,7 +441,6 @@ Courier::getAssignedOrderState(const std::string &orderId) const {
   }
 
   for (const auto *list : {&assignedOrders, &blockedOrders, &finishedOrders}) {
-
     for (const Order &order : *list) {
       if (order.orderId == orderId) {
         return order.getState();
