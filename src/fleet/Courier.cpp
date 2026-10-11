@@ -8,8 +8,6 @@
 
 namespace {
 
-// Tiempo fijo de entrega en restaurante.
-// Son milisegundos SIMULADOS.
 constexpr long long kPickupHandoffMs = 2000;
 
 } // namespace
@@ -36,8 +34,8 @@ void Courier::run() {
     std::unique_lock<std::mutex> lock(stateMutex);
 
     workCv.wait(lock, [this] {
-      return stopRequested || destination.has_value() ||
-             !assignedOrders.empty();
+      return stopRequested || state == CourierState::Broken ||
+             destination.has_value() || !assignedOrders.empty();
     });
 
     if (stopRequested) {
@@ -46,7 +44,20 @@ void Courier::run() {
       break;
     }
 
-    // Movimiento manual.
+    // La moto averiada no procesa mas pedidos.
+    // Conserva su carga mientras espera rescate.
+    if (state == CourierState::Broken) {
+      workCv.wait(lock, [this] { return stopRequested; });
+
+      finishPendingLocked();
+      state = CourierState::Idle;
+      break;
+    }
+
+    // =========================================
+    // MOVIMIENTO MANUAL DE PRUEBAS
+    // =========================================
+
     if (destination) {
       const std::string target = *destination;
       destination.reset();
@@ -54,6 +65,7 @@ void Courier::run() {
       state = CourierState::Moving;
       lock.unlock();
 
+      // El movimiento manual no genera averias.
       travelTo(target);
 
       lock.lock();
@@ -68,7 +80,10 @@ void Courier::run() {
       continue;
     }
 
-    // Procesar siguiente pedido.
+    // =========================================
+    // PROCESAR SIGUIENTE PEDIDO
+    // =========================================
+
     activeOrder.emplace(std::move(assignedOrders.front()));
 
     assignedOrders.pop_front();
@@ -84,6 +99,12 @@ void Courier::run() {
       finishPendingLocked();
       state = CourierState::Idle;
       break;
+    }
+
+    // NUEVO: mantener todos los pedidos
+    // bajo custodia si la moto se averio.
+    if (state == CourierState::Broken) {
+      continue;
     }
 
     if (!delivered && activeOrder) {
@@ -131,7 +152,11 @@ bool Courier::processActiveOrder() {
   // ETAPA 1: VIAJAR AL RESTAURANTE
   // =============================================
 
-  if (!travelTo(restaurant->nodeId)) {
+  const auto restaurantBreakdown = incidents::makeBreakdownPlan(
+      config.orders.seed, id, orderId, "toRestaurant",
+      config.incidents.breakdownProbability);
+
+  if (!travelTo(restaurant->nodeId, &restaurantBreakdown)) {
     return false;
   }
 
@@ -142,8 +167,6 @@ bool Courier::processActiveOrder() {
   const long long preparationMs =
       preparationDurationMs(*restaurant, orderId, config.orders.seed);
 
-  // La comida comienza a prepararse
-  // desde la creacion del pedido.
   const long long readyAt = creationTime + preparationMs;
 
   {
@@ -160,7 +183,6 @@ bool Courier::processActiveOrder() {
       const double realWaitMs = static_cast<double>(remainingSimulatedMs) /
                                 config.simulation.timeScale;
 
-      // Espera interrumpible sin busy waiting.
       workCv.wait_for(lock,
                       std::chrono::duration<double, std::milli>(realWaitMs),
                       [this] { return stopRequested; });
@@ -188,12 +210,10 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 4: ENTREGA DE COMIDA EN RESTAURANTE
+  // ETAPA 4: ENTREGA EN RESTAURANTE
   // =============================================
 
   {
-    // Mientras el permiso exista, el restaurante
-    // tiene un cupo ocupado por esta moto.
     std::unique_lock<std::mutex> lock(stateMutex);
 
     if (stopRequested || !activeOrder) {
@@ -203,9 +223,6 @@ bool Courier::processActiveOrder() {
     const double realHandoffMs =
         static_cast<double>(kPickupHandoffMs) / config.simulation.timeScale;
 
-    // Simular el tiempo de entrega de comida.
-    // workCv libera temporalmente stateMutex.
-    // pickupPermit permanece adquirido.
     const bool interrupted = workCv.wait_for(
         lock, std::chrono::duration<double, std::milli>(realHandoffMs),
         [this] { return stopRequested; });
@@ -214,30 +231,27 @@ bool Courier::processActiveOrder() {
       return false;
     }
 
-    // Solo ahora se completa la recogida.
     if (!activeOrder->transitionTo(OrderState::PickedUp)) {
       return false;
     }
   }
 
-  // =============================================
-  // ETAPA 5: LIBERAR CUPO DEL RESTAURANTE
-  // =============================================
-
-  // RAII libera el cupo incluso si se retorna
-  // anticipadamente durante la espera.
   pickupPermit.reset();
 
   // =============================================
-  // ETAPA 6: VIAJAR AL CLIENTE
+  // ETAPA 5: VIAJAR AL CLIENTE
   // =============================================
 
-  if (!travelTo(deliveryNode)) {
+  const auto customerBreakdown = incidents::makeBreakdownPlan(
+      config.orders.seed, id, orderId, "toCustomer",
+      config.incidents.breakdownProbability);
+
+  if (!travelTo(deliveryNode, &customerBreakdown)) {
     return false;
   }
 
   // =============================================
-  // ETAPA 7: ENTREGAR PEDIDO
+  // ETAPA 6: ENTREGAR PEDIDO
   // =============================================
 
   {
@@ -253,7 +267,6 @@ bool Courier::processActiveOrder() {
     activeOrder.reset();
   }
 
-  // Avisar al Dispatcher que hay capacidad.
   if (capacitySignal) {
     capacitySignal->notifyChange();
   }
@@ -262,10 +275,11 @@ bool Courier::processActiveOrder() {
 }
 
 // =====================================================
-// MOVIMIENTO SOBRE LA RED DE CALLES
+// MOVIMIENTO Y DETECCION DE AVERIAS
 // =====================================================
 
-bool Courier::travelTo(const std::string &targetNode) {
+bool Courier::travelTo(const std::string &targetNode,
+                       const incidents::BreakdownPlan *breakdown) {
   std::string origin;
 
   {
@@ -281,24 +295,66 @@ bool Courier::travelTo(const std::string &targetNode) {
 
   const double speedMetersPerSecond = config.fleet.speedKmh / 3.6;
 
+  const bool shouldBreak =
+      breakdown != nullptr && breakdown->occurs && route->distanceMeters > 0.0;
+
+  const double breakdownDistance =
+      shouldBreak ? route->distanceMeters * breakdown->atFraction : 0.0;
+
+  double traveledMeters = 0.0;
+
   for (const RouteSegment &segment : route->segments) {
 
-    const double simulatedSeconds =
-        segment.distanceMeters / speedMetersPerSecond;
+    // Determinar si la averia ocurre
+    // dentro de este segmento.
+    const bool breakdownHere =
+        shouldBreak &&
+        traveledMeters + segment.distanceMeters >= breakdownDistance;
+
+    const double distanceToTravel =
+        breakdownHere ? std::max(0.0, breakdownDistance - traveledMeters)
+                      : segment.distanceMeters;
+
+    const double simulatedSeconds = distanceToTravel / speedMetersPerSecond;
 
     const double realSeconds = simulatedSeconds / config.simulation.timeScale;
 
-    std::unique_lock<std::mutex> lock(stateMutex);
+    {
+      std::unique_lock<std::mutex> lock(stateMutex);
 
-    const bool interrupted =
-        workCv.wait_for(lock, std::chrono::duration<double>(realSeconds),
-                        [this] { return stopRequested; });
+      const bool interrupted =
+          workCv.wait_for(lock, std::chrono::duration<double>(realSeconds),
+                          [this] { return stopRequested; });
 
-    if (interrupted) {
+      if (interrupted || stopRequested) {
+        return false;
+      }
+
+      // =====================================
+      // AVERIA DURANTE EL VIAJE
+      // =====================================
+
+      if (breakdownHere) {
+        state = CourierState::Broken;
+
+        // No avanzar al nodo final:
+        // la moto quedo detenida en
+        // el segmento actual.
+      } else {
+        currentNode = segment.to;
+      }
+    }
+
+    if (breakdownHere) {
+      // Avisar fuera del mutex del Courier.
+      if (capacitySignal) {
+        capacitySignal->notifyChange();
+      }
+
       return false;
     }
 
-    currentNode = segment.to;
+    traveledMeters += segment.distanceMeters;
   }
 
   return true;
@@ -388,7 +444,7 @@ bool Courier::tryAssignOrder(Order &&order) {
 }
 
 // =====================================================
-// CIERRE DE PEDIDOS PENDIENTES
+// FINALIZAR PEDIDOS PENDIENTES
 // =====================================================
 
 void Courier::finishPendingLocked() {
@@ -465,7 +521,7 @@ void Courier::requestStop() {
 }
 
 // =====================================================
-// INFORMACION DEL REPARTIDOR
+// INFORMACION
 // =====================================================
 
 std::string Courier::getId() const { return id; }

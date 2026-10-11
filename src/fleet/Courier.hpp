@@ -4,6 +4,7 @@
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
 #include "fleet/CapacitySignal.hpp"
+#include "incidents/BreakdownPolicy.hpp"
 #include "map/RoadNetwork.hpp"
 #include "orders/Order.hpp"
 #include "restaurants/RestaurantManager.hpp"
@@ -29,8 +30,6 @@ private:
   SimulationClock &clock;
 
   std::shared_ptr<CapacitySignal> capacitySignal;
-
-  // Compartido con todas las motos de Fleet.
   std::shared_ptr<RestaurantManager> restaurantManager;
 
   mutable std::mutex stateMutex;
@@ -47,7 +46,9 @@ private:
   std::deque<Order> blockedOrders;
   std::deque<Order> finishedOrders;
 
-  bool travelTo(const std::string &targetNode);
+  bool travelTo(const std::string &targetNode,
+                const incidents::BreakdownPlan *breakdown = nullptr);
+
   bool processActiveOrder();
 
   bool hasOrderIdLocked(const std::string &orderId) const;
@@ -55,8 +56,6 @@ private:
   void finishPendingLocked();
 
 public:
-  // Parametros opcionales para conservar
-  // compatibilidad con pruebas anteriores.
   Courier(std::string id, const SimulationConfig &config,
           const RoadNetwork &roadNetwork, SimulationClock &clock,
           std::shared_ptr<CapacitySignal> capacitySignal = nullptr,
@@ -65,6 +64,7 @@ public:
   void run();
 
   bool assignDestination(const std::string &nodeId);
+
   bool tryAssignOrder(Order &&order);
 
   std::size_t getReservedCount() const;
@@ -79,7 +79,6 @@ public:
   std::string getCurrentNode() const;
   CourierState getState() const;
 
-  // Recuperar pedidos despues de Fleet::join().
   std::vector<Order> takeFinishedOrders() {
     std::lock_guard<std::mutex> lock(stateMutex);
 
@@ -88,6 +87,7 @@ public:
 
     while (!finishedOrders.empty()) {
       results.push_back(std::move(finishedOrders.front()));
+
       finishedOrders.pop_front();
     }
 
