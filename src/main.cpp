@@ -57,6 +57,7 @@ int main(int argc, char *argv[]) {
     // ============================================
 
     fleet.start();
+    fleet.startRescue();
 
     std::cout << "Flota iniciada con " << fleet.size() << " repartidores.\n";
 
