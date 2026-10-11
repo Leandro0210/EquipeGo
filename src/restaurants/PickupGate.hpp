@@ -11,8 +11,6 @@
 #include <stdexcept>
 #include <utility>
 
-// Controla los cupos de recogida de UN restaurante.
-// Se comparte entre todos los repartidores que llegan a el.
 class PickupGate {
 private:
   const std::size_t capacity_;
@@ -24,15 +22,11 @@ private:
   std::size_t waiting_ = 0;
   std::size_t peak_ = 0;
 
-  // Tickets para garantizar FIFO.
   std::uint64_t issuedTicket_ = 0;
   std::uint64_t nextToEnter_ = 0;
 
   bool stopping_ = false;
 
-  // ================================================
-  // LIBERAR UN CUPO
-  // ================================================
   void releaseSlot() noexcept {
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -43,10 +37,9 @@ private:
   }
 
 public:
-  // ================================================
+  // ============================================
   // PERMISO RAII
-  // ================================================
-  // Al destruirse, libera automaticamente el cupo.
+  // ============================================
 
   class Permit {
     friend class PickupGate;
@@ -65,6 +58,7 @@ public:
     Permit &operator=(Permit &&other) noexcept {
       if (this != &other) {
         release();
+
         gate_ = std::exchange(other.gate_, nullptr);
       }
 
@@ -82,9 +76,9 @@ public:
     }
   };
 
-  // ================================================
+  // ============================================
   // CONSTRUCTOR
-  // ================================================
+  // ============================================
 
   explicit PickupGate(std::size_t pickupSlots) : capacity_(pickupSlots) {
 
@@ -96,37 +90,32 @@ public:
   PickupGate(const PickupGate &) = delete;
   PickupGate &operator=(const PickupGate &) = delete;
 
-  // ================================================
-  // ADQUIRIR UN CUPO EN ORDEN FIFO
-  // ================================================
+  // ============================================
+  // ADQUIRIR CUPO FIFO
+  // ============================================
 
   std::optional<Permit> acquire() {
-
     std::unique_lock<std::mutex> lock(mutex_);
 
     if (stopping_) {
       return std::nullopt;
     }
 
-    // Cada repartidor obtiene un ticket.
     const std::uint64_t myTicket = issuedTicket_++;
 
     ++waiting_;
     cv_.notify_all();
 
-    // Esperar sin consumir CPU.
     cv_.wait(lock, [this, myTicket] {
       return stopping_ || (myTicket == nextToEnter_ && occupied_ < capacity_);
     });
 
     --waiting_;
 
-    // El restaurante esta cerrando.
     if (stopping_) {
       return std::nullopt;
     }
 
-    // Ahora es el turno de este repartidor.
     ++nextToEnter_;
     ++occupied_;
 
@@ -138,9 +127,9 @@ public:
     return Permit(this);
   }
 
-  // ================================================
-  // SOLICITAR APAGADO
-  // ================================================
+  // ============================================
+  // APAGADO
+  // ============================================
 
   void requestStop() {
     {
@@ -148,13 +137,12 @@ public:
       stopping_ = true;
     }
 
-    // Despertar a todos los que siguen en fila.
     cv_.notify_all();
   }
 
-  // ================================================
+  // ============================================
   // CONSULTAS SEGURAS
-  // ================================================
+  // ============================================
 
   std::size_t occupied() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -171,13 +159,23 @@ public:
     return waiting_;
   }
 
-  // Permite observar una fila en las pruebas
-  // sin utilizar sleep ni un bucle de sondeo.
   bool waitForWaitingCount(std::size_t atLeast,
                            std::chrono::steady_clock::time_point deadline) {
     std::unique_lock<std::mutex> lock(mutex_);
 
     return cv_.wait_until(lock, deadline,
                           [this, atLeast] { return waiting_ >= atLeast; });
+  }
+
+  // ============================================
+  // NUEVO: ESPERAR HASTA OBSERVAR CUPOS OCUPADOS
+  // ============================================
+
+  bool waitForOccupiedCount(std::size_t atLeast,
+                            std::chrono::steady_clock::time_point deadline) {
+    std::unique_lock<std::mutex> lock(mutex_);
+
+    return cv_.wait_until(lock, deadline,
+                          [this, atLeast] { return occupied_ >= atLeast; });
   }
 };

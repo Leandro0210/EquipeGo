@@ -6,6 +6,14 @@
 #include <chrono>
 #include <utility>
 
+namespace {
+
+// Tiempo fijo de entrega en restaurante.
+// Son milisegundos SIMULADOS.
+constexpr long long kPickupHandoffMs = 2000;
+
+} // namespace
+
 // =====================================================
 // CONSTRUCTOR
 // =====================================================
@@ -38,7 +46,7 @@ void Courier::run() {
       break;
     }
 
-    // Movimiento manual para pruebas.
+    // Movimiento manual.
     if (destination) {
       const std::string target = *destination;
       destination.reset();
@@ -60,6 +68,7 @@ void Courier::run() {
       continue;
     }
 
+    // Procesar siguiente pedido.
     activeOrder.emplace(std::move(assignedOrders.front()));
 
     assignedOrders.pop_front();
@@ -127,14 +136,14 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 2: ESPERAR LA PREPARACION
+  // ETAPA 2: ESPERAR PREPARACION
   // =============================================
 
   const long long preparationMs =
       preparationDurationMs(*restaurant, orderId, config.orders.seed);
 
-  // La preparacion comienza cuando nace
-  // el pedido, NO cuando llega la moto.
+  // La comida comienza a prepararse
+  // desde la creacion del pedido.
   const long long readyAt = creationTime + preparationMs;
 
   {
@@ -144,17 +153,14 @@ bool Courier::processActiveOrder() {
       const long long remainingSimulatedMs =
           readyAt - clock.getSimulatedTimeMs();
 
-      // La comida ya esta preparada.
       if (remainingSimulatedMs <= 0) {
         break;
       }
 
-      // Convertir tiempo simulado a real.
       const double realWaitMs = static_cast<double>(remainingSimulatedMs) /
                                 config.simulation.timeScale;
 
-      // Espera bloqueante e interrumpible.
-      // No hay sondeo activo.
+      // Espera interrumpible sin busy waiting.
       workCv.wait_for(lock,
                       std::chrono::duration<double, std::milli>(realWaitMs),
                       [this] { return stopRequested; });
@@ -182,22 +188,48 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 4: RECOGER PEDIDO
+  // ETAPA 4: ENTREGA DE COMIDA EN RESTAURANTE
   // =============================================
 
   {
-    std::lock_guard<std::mutex> lock(stateMutex);
+    // Mientras el permiso exista, el restaurante
+    // tiene un cupo ocupado por esta moto.
+    std::unique_lock<std::mutex> lock(stateMutex);
 
-    if (stopRequested || !activeOrder ||
-        !activeOrder->transitionTo(OrderState::PickedUp)) {
+    if (stopRequested || !activeOrder) {
+      return false;
+    }
+
+    const double realHandoffMs =
+        static_cast<double>(kPickupHandoffMs) / config.simulation.timeScale;
+
+    // Simular el tiempo de entrega de comida.
+    // workCv libera temporalmente stateMutex.
+    // pickupPermit permanece adquirido.
+    const bool interrupted = workCv.wait_for(
+        lock, std::chrono::duration<double, std::milli>(realHandoffMs),
+        [this] { return stopRequested; });
+
+    if (interrupted || stopRequested || !activeOrder) {
+      return false;
+    }
+
+    // Solo ahora se completa la recogida.
+    if (!activeOrder->transitionTo(OrderState::PickedUp)) {
       return false;
     }
   }
 
+  // =============================================
+  // ETAPA 5: LIBERAR CUPO DEL RESTAURANTE
+  // =============================================
+
+  // RAII libera el cupo incluso si se retorna
+  // anticipadamente durante la espera.
   pickupPermit.reset();
 
   // =============================================
-  // ETAPA 5: VIAJAR AL CLIENTE
+  // ETAPA 6: VIAJAR AL CLIENTE
   // =============================================
 
   if (!travelTo(deliveryNode)) {
@@ -205,7 +237,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 6: ENTREGAR
+  // ETAPA 7: ENTREGAR PEDIDO
   // =============================================
 
   {
@@ -221,6 +253,7 @@ bool Courier::processActiveOrder() {
     activeOrder.reset();
   }
 
+  // Avisar al Dispatcher que hay capacidad.
   if (capacitySignal) {
     capacitySignal->notifyChange();
   }
@@ -229,7 +262,7 @@ bool Courier::processActiveOrder() {
 }
 
 // =====================================================
-// MOVIMIENTO POR LAS CALLES
+// MOVIMIENTO SOBRE LA RED DE CALLES
 // =====================================================
 
 bool Courier::travelTo(const std::string &targetNode) {
