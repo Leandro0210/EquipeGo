@@ -67,6 +67,11 @@ public:
 
   bool tryAssignOrder(Order &&order);
 
+  // DP6: transferencia atomica de toda la carga.
+  // Solo permite transferir desde una moto Broken
+  // hacia otra que tenga capacidad suficiente.
+  bool transferAllTo(Courier &recipient);
+
   std::size_t getReservedCount() const;
   std::size_t getFinishedCount() const;
 
