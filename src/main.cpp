@@ -1,4 +1,3 @@
-
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
 #include "core/Logger.hpp"
@@ -11,13 +10,262 @@
 #include <chrono>
 #include <cstddef>
 #include <exception>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+// =====================================================
+// DP7.3 - ESTADISTICAS DESDE EL REGISTRO REAL
+// =====================================================
+
+struct EventAudit {
+  std::size_t created = 0;
+  std::size_t delivered = 0;
+  std::size_t rejected = 0;
+  std::size_t reassigned = 0;
+  std::size_t breakdowns = 0;
+  std::size_t stopping = 0;
+
+  long long deliveryDurationSumMs = 0;
+  long long maxDeliveryMs = 0;
+
+  std::unordered_map<std::string, std::size_t> deliveredPerCourier;
+};
+
+// =====================================================
+// VALIDAR EL ARCHIVO JSONL
+// =====================================================
+
+EventAudit auditEventLog(const std::string &filename,
+                         const std::vector<std::string> &courierIds) {
+
+  std::ifstream input(filename);
+
+  if (!input) {
+    throw std::runtime_error("No se pudo leer el JSONL: " + filename);
+  }
+
+  EventAudit audit;
+
+  std::unordered_set<std::string> validCouriers;
+
+  for (const std::string &courier : courierIds) {
+    validCouriers.insert(courier);
+    audit.deliveredPerCourier[courier] = 0;
+  }
+
+  std::unordered_map<std::string, long long> creationTimes;
+  std::unordered_map<std::string, long long> lastTimes;
+
+  std::unordered_set<std::string> deliveredIds;
+  std::unordered_set<std::string> rejectedIds;
+
+  std::string line;
+  std::size_t lineNumber = 0;
+  bool stoppingSeen = false;
+
+  while (std::getline(input, line)) {
+
+    ++lineNumber;
+
+    if (line.empty()) {
+      throw std::runtime_error("Linea vacia en JSONL");
+    }
+
+    const nlohmann::json event = nlohmann::json::parse(line);
+
+    if (!event.is_object() || !event.contains("t") ||
+        !event["t"].is_number_integer() || !event.contains("event") ||
+        !event["event"].is_string()) {
+      throw std::runtime_error("Evento JSONL invalido en linea " +
+                               std::to_string(lineNumber));
+    }
+
+    const long long time = event.at("t").get<long long>();
+
+    const std::string name = event.at("event").get<std::string>();
+
+    if (time < 0) {
+      throw std::runtime_error("Tiempo negativo en JSONL");
+    }
+
+    if (stoppingSeen) {
+      throw std::runtime_error("Evento despues de simulationStopping");
+    }
+
+    std::string orderId;
+
+    if (event.contains("order")) {
+      orderId = event.at("order").get<std::string>();
+
+      if (orderId.empty()) {
+        throw std::runtime_error("Pedido con ID vacio");
+      }
+
+      const auto previous = lastTimes.find(orderId);
+
+      if (previous != lastTimes.end() && time < previous->second) {
+        throw std::runtime_error("Tiempo no monotono: " + orderId);
+      }
+
+      lastTimes[orderId] = time;
+    }
+
+    // =========================================
+    // PEDIDO CREADO
+    // =========================================
+
+    if (name == "orderCreated") {
+
+      if (orderId.empty() || !event.contains("restaurant")) {
+        throw std::runtime_error("orderCreated sin campos obligatorios");
+      }
+
+      if (!creationTimes.emplace(orderId, time).second) {
+        throw std::runtime_error("Pedido creado dos veces: " + orderId);
+      }
+
+      ++audit.created;
+    }
+
+    // =========================================
+    // PEDIDO ASIGNADO
+    // =========================================
+
+    else if (name == "orderAssigned") {
+
+      if (creationTimes.find(orderId) == creationTimes.end() ||
+          !event.contains("courier")) {
+        throw std::runtime_error("orderAssigned invalido: " + orderId);
+      }
+    }
+
+    // =========================================
+    // COMIENZO DE RECOGIDA
+    // =========================================
+
+    else if (name == "pickupStarted" || name == "orderPickedUp") {
+
+      if (creationTimes.find(orderId) == creationTimes.end() ||
+          !event.contains("courier") || !event.contains("restaurant")) {
+        throw std::runtime_error("Evento de recogida invalido: " + orderId);
+      }
+    }
+
+    // =========================================
+    // PEDIDO ENTREGADO
+    // =========================================
+
+    else if (name == "orderDelivered") {
+
+      const auto created = creationTimes.find(orderId);
+
+      if (created == creationTimes.end() || rejectedIds.count(orderId) != 0 ||
+          !deliveredIds.insert(orderId).second) {
+        throw std::runtime_error("Entrega invalida o duplicada: " + orderId);
+      }
+
+      const std::string courier = event.at("courier").get<std::string>();
+
+      if (validCouriers.count(courier) == 0) {
+        throw std::runtime_error("Repartidor desconocido: " + courier);
+      }
+
+      const long long duration = time - created->second;
+
+      if (duration < 0) {
+        throw std::runtime_error("Duracion negativa: " + orderId);
+      }
+
+      ++audit.delivered;
+      ++audit.deliveredPerCourier[courier];
+
+      audit.deliveryDurationSumMs += duration;
+
+      if (duration > audit.maxDeliveryMs) {
+        audit.maxDeliveryMs = duration;
+      }
+    }
+
+    // =========================================
+    // PEDIDO RECHAZADO
+    // =========================================
+
+    else if (name == "orderRejected") {
+
+      const std::string reason = event.at("reason").get<std::string>();
+
+      const bool validReason = reason == "queueFull" ||
+                               reason == "unreachable" || reason == "noCourier";
+
+      if (!validReason || creationTimes.count(orderId) == 0 ||
+          deliveredIds.count(orderId) != 0 ||
+          !rejectedIds.insert(orderId).second) {
+        throw std::runtime_error("Rechazo invalido: " + orderId);
+      }
+
+      ++audit.rejected;
+    }
+
+    // =========================================
+    // AVERIA DE REPARTIDOR
+    // =========================================
+
+    else if (name == "courierBreakdown") {
+
+      const std::string courier = event.at("courier").get<std::string>();
+
+      if (validCouriers.count(courier) == 0) {
+        throw std::runtime_error("Averia de repartidor desconocido");
+      }
+
+      ++audit.breakdowns;
+    }
+
+    // =========================================
+    // REASIGNACION DE PEDIDO
+    // =========================================
+
+    else if (name == "orderReassigned") {
+
+      const std::string from = event.at("from").get<std::string>();
+
+      const std::string to = event.at("to").get<std::string>();
+
+      if (creationTimes.count(orderId) == 0 || validCouriers.count(from) == 0 ||
+          validCouriers.count(to) == 0 || from == to) {
+        throw std::runtime_error("Reasignacion invalida: " + orderId);
+      }
+
+      ++audit.reassigned;
+    }
+
+    // =========================================
+    // FIN DE SIMULACION
+    // =========================================
+
+    else if (name == "simulationStopping") {
+      ++audit.stopping;
+      stoppingSeen = true;
+    }
+
+    else {
+      throw std::runtime_error("Evento no permitido: " + name);
+    }
+  }
+
+  if (!input.eof() || audit.stopping != 1) {
+    throw std::runtime_error("JSONL incompleto o sin simulationStopping");
+  }
+
+  return audit;
+}
 
 // =====================================================
 // MAIN - EQUIPEGO
@@ -33,14 +281,16 @@ int main(int argc, char *argv[]) {
 
   try {
 
-    // ============================================
-    // 1. PREPARAR COMPONENTES
-    // ============================================
+    // =========================================
+    // 1. CREAR COMPONENTES
+    // =========================================
 
     SimulationClock clock;
     clock.start(config.simulation.timeScale);
 
-    EventLogger logger(config.logFilePath);
+    // true: emitir JSONL tambien a stdout.
+    EventLogger logger(config.logFilePath, true);
+
     RoadNetwork roadNetwork(config);
 
     OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
@@ -51,40 +301,49 @@ int main(int argc, char *argv[]) {
 
     Dispatcher dispatcher(config, roadNetwork, fleet);
 
-    logger.logStart();
-
-    // ============================================
-    // 2. INICIAR FLOTA Y CONECTAR LOGGER
-    // ============================================
+    // =========================================
+    // 2. INICIAR FLOTA
+    // =========================================
 
     fleet.start();
 
-    // DP7.2: todas las motos usaran
-    // el mismo EventLogger concurrente.
-    //
-    // Todavia no hay pedidos creados ni
-    // asignados, porque producer y
-    // dispatcher no han comenzado.
+    std::vector<std::string> courierIds;
+    courierIds.reserve(fleet.size());
+
     for (std::size_t i = 0; i < fleet.size(); ++i) {
 
-      fleet.at(i).setEventLogger(&logger);
+      Courier &courier = fleet.at(i);
+
+      courier.setEventLogger(&logger);
+      courierIds.push_back(courier.getId());
     }
 
     fleet.startRescue();
 
-    std::cout << "Flota iniciada con " << fleet.size() << " repartidores.\n";
+    // =========================================
+    // 3. INICIAR DISPATCHER
+    // =========================================
 
     std::thread dispatcherThread(&Dispatcher::run, &dispatcher,
                                  std::ref(orderBook), std::ref(logger),
                                  std::ref(clock));
 
+    // El Dispatcher ya esta iniciado y
+    // la flota esta preparada.
+    //
+    // La linea se imprime ANTES de crear
+    // el primer pedido.
+    logger.logStart();
+
+    // =========================================
+    // 4. INICIAR PRODUCTOR
+    // =========================================
+
     std::thread producerThread(&OrderProducer::run, &producer);
 
-    std::cout << "Dispatcher iniciado.\n";
-
-    // ============================================
-    // 3. DURACION DE LA SIMULACION
-    // ============================================
+    // =========================================
+    // 5. DURACION DE SIMULACION
+    // =========================================
 
     if (config.simulation.durationS > 0) {
 
@@ -94,14 +353,11 @@ int main(int argc, char *argv[]) {
 
       std::this_thread::sleep_for(
           std::chrono::duration<double>(realDurationSeconds));
-
-      logger.logEvent({{"event", "simulationStopping"}},
-                      clock.getSimulatedTimeMs());
     }
 
-    // ============================================
-    // 4. DETENER PRODUCTOR
-    // ============================================
+    // =========================================
+    // 6. DETENER PRODUCTOR
+    // =========================================
 
     producer.requestStop();
     producerThread.join();
@@ -110,9 +366,9 @@ int main(int argc, char *argv[]) {
 
     const std::size_t producerRejected = producer.getRejectedCount();
 
-    // ============================================
-    // 5. DETENER DISPATCHER
-    // ============================================
+    // =========================================
+    // 7. DETENER DISPATCHER
+    // =========================================
 
     dispatcher.requestStop(orderBook);
     dispatcherThread.join();
@@ -123,16 +379,16 @@ int main(int argc, char *argv[]) {
 
     const std::size_t dispatcherPending = dispatcher.getPendingCount();
 
-    // ============================================
-    // 6. DETENER FLOTA
-    // ============================================
+    // =========================================
+    // 8. DETENER FLOTA
+    // =========================================
 
     fleet.requestStop();
     fleet.join();
 
-    // ============================================
-    // 7. CONTABILIZAR PEDIDOS DE LA FLOTA
-    // ============================================
+    // =========================================
+    // 9. RECUPERAR RESULTADOS DE LA FLOTA
+    // =========================================
 
     std::vector<CourierOrderResult> fleetResults = fleet.takeFinishedOrders();
 
@@ -148,47 +404,23 @@ int main(int argc, char *argv[]) {
       const Order &order = result.order;
 
       if (!fleetOrderIds.insert(order.orderId).second) {
-
         throw std::logic_error("Pedido duplicado en Fleet: " + order.orderId);
       }
 
-      // ========================================
-      // PEDIDO ENTREGADO
-      // ========================================
-
       if (order.getState() == OrderState::Delivered) {
-
         ++deliveredCount;
 
-        // DP7.2:
-        // NO registrar aqui orderDelivered.
-        // La moto ya lo registro cuando
-        // ocurrio realmente la entrega.
-
       } else if (order.getState() == OrderState::Pending) {
-
-        // ======================================
-        // PEDIDO PENDIENTE
-        // ======================================
-
         ++fleetPendingCount;
 
-        logger.logEvent({{"event", "orderPending"},
-                         {"order", order.orderId},
-                         {"courier", result.courierId},
-                         {"source", "fleet"}},
-                        clock.getSimulatedTimeMs());
-
       } else {
-
-        throw std::logic_error("Pedido sin estado final en Fleet: " +
-                               order.orderId);
+        throw std::logic_error("Pedido sin estado final: " + order.orderId);
       }
     }
 
-    // ============================================
-    // 8. RECUPERAR PENDIENTES DE ORDERBOOK
-    // ============================================
+    // =========================================
+    // 10. RECUPERAR PEDIDOS DE ORDERBOOK
+    // =========================================
 
     std::vector<Order> remainingOrders = orderBook.takeRemaining();
 
@@ -197,21 +429,15 @@ int main(int argc, char *argv[]) {
     for (Order &order : remainingOrders) {
 
       if (!order.transitionTo(OrderState::Pending)) {
-
         throw std::logic_error("No se pudo finalizar: " + order.orderId);
       }
-
-      logger.logEvent({{"event", "orderPending"},
-                       {"order", order.orderId},
-                       {"source", "orderBook"}},
-                      clock.getSimulatedTimeMs());
 
       ++bookPendingCount;
     }
 
-    // ============================================
-    // 9. CALCULAR RESULTADOS GLOBALES
-    // ============================================
+    // =========================================
+    // 11. CONTABILIDAD DEL SIMULADOR
+    // =========================================
 
     const std::size_t rejectedCount = producerRejected + dispatcherRejected;
 
@@ -221,69 +447,94 @@ int main(int argc, char *argv[]) {
     const std::size_t totalFinalized =
         deliveredCount + rejectedCount + pendingCount;
 
-    const bool fleetComplete = fleetFinalizedCount == assignedCount;
-
-    const bool accountingComplete = totalFinalized == createdCount;
-
-    // ============================================
-    // 10. RESUMEN FINAL PROVISIONAL
-    // ============================================
-
-    std::cout << "\n=== RESUMEN FINAL EQUIPEGO ===\n";
-
-    std::cout << "Pedidos generados: " << createdCount << '\n';
-
-    std::cout << "Pedidos asignados a motos: " << assignedCount << '\n';
-
-    std::cout << "\n--- ESTADOS FINALES ---\n";
-
-    std::cout << "Entregados: " << deliveredCount << '\n';
-
-    std::cout << "Rechazados: " << rejectedCount << '\n';
-
-    std::cout << "Pendientes: " << pendingCount << '\n';
-
-    std::cout << "\n--- DETALLE DE PENDIENTES ---\n";
-
-    std::cout << "En motos: " << fleetPendingCount << '\n';
-
-    std::cout << "En Dispatcher: " << dispatcherPending << '\n';
-
-    std::cout << "En OrderBook: " << bookPendingCount << '\n';
-
-    std::cout << "\n--- DP6 INCIDENTES Y RESCATES ---\n";
-
-    std::cout << "Motos averiadas: " << fleet.getBreakdownCount() << '\n';
-
-    std::cout << "Rescates exitosos: " << fleet.getRescueCount() << '\n';
-
-    std::cout << "Pedidos rescatados: " << fleet.getRescuedOrderCount() << '\n';
-
-    std::cout << "\n--- AUDITORIA ---\n";
-
-    std::cout << "Total contabilizado: " << totalFinalized << '\n';
-
-    std::cout << "Pedidos restantes en OrderBook: " << orderBook.size() << '\n';
-
-    std::cout << "Todos los asignados finalizados: "
-              << (fleetComplete ? "OK" : "ERROR") << '\n';
-
-    std::cout << "Balance global: " << (accountingComplete ? "OK" : "ERROR")
-              << '\n';
-
-    // ============================================
-    // 11. VALIDAR INTEGRIDAD
-    // ============================================
-
-    if (!fleetComplete || !accountingComplete) {
-
-      std::cerr << "ERROR: inconsistencia en "
-                << "la contabilidad de pedidos\n";
-
-      return 2;
+    if (fleetFinalizedCount != assignedCount) {
+      throw std::logic_error("Los pedidos asignados no coinciden "
+                             "con los resultados de Fleet");
     }
 
-    std::cout << "Flota detenida correctamente.\n";
+    if (totalFinalized != createdCount) {
+      throw std::logic_error("Balance global de pedidos incorrecto");
+    }
+
+    // =========================================
+    // 12. ULTIMO EVENTO DEL JSONL
+    // =========================================
+
+    // Todos los hilos ya terminaron.
+    // No apareceran eventos nuevos despues.
+    logger.logEvent({{"event", "simulationStopping"}},
+                    clock.getSimulatedTimeMs());
+
+    logger.flush();
+
+    // =========================================
+    // 13. AUDITORIA DEL ARCHIVO
+    // =========================================
+
+    const EventAudit audit = auditEventLog(config.logFilePath, courierIds);
+
+    if (audit.created != createdCount || audit.delivered != deliveredCount ||
+        audit.rejected != rejectedCount ||
+        audit.reassigned != fleet.getRescuedOrderCount() ||
+        audit.breakdowns != fleet.getBreakdownCount()) {
+
+      throw std::logic_error("Los eventos JSONL no coinciden "
+                             "con los contadores del simulador");
+    }
+
+    if (audit.created < audit.delivered + audit.rejected) {
+
+      throw std::logic_error("Mas entregas y rechazos que creaciones");
+    }
+
+    const std::size_t pendingFromEvents =
+        audit.created - audit.delivered - audit.rejected;
+
+    if (pendingFromEvents != pendingCount) {
+      throw std::logic_error("Los pedidos pendientes no coinciden");
+    }
+
+    // =========================================
+    // 14. CALCULAR METRICAS DE ENTREGA
+    // =========================================
+
+    const double avgDeliveryMs =
+        audit.delivered > 0 ? static_cast<double>(audit.deliveryDurationSumMs) /
+                                  static_cast<double>(audit.delivered)
+                            : 0.0;
+
+    nlohmann::json perCourier = nlohmann::json::object();
+
+    std::size_t sumDeliveredPerCourier = 0;
+
+    for (const std::string &courier : courierIds) {
+
+      const std::size_t count = audit.deliveredPerCourier.at(courier);
+
+      perCourier[courier] = count;
+      sumDeliveredPerCourier += count;
+    }
+
+    if (sumDeliveredPerCourier != audit.delivered) {
+      throw std::logic_error("La suma por repartidor no coincide");
+    }
+
+    // =========================================
+    // 15. RESUMEN FINAL OBLIGATORIO
+    // =========================================
+
+    const nlohmann::json summary = {{"created", audit.created},
+                                    {"delivered", audit.delivered},
+                                    {"rejected", audit.rejected},
+                                    {"pending", pendingFromEvents},
+                                    {"reassigned", audit.reassigned},
+                                    {"breakdowns", audit.breakdowns},
+                                    {"avgDeliveryMs", avgDeliveryMs},
+                                    {"maxDeliveryMs", audit.maxDeliveryMs},
+                                    {"deliveredPerCourier", perCourier}};
+
+    // Debe ser la ultima linea de stdout.
+    std::cout << summary.dump() << '\n' << std::flush;
 
     return 0;
 

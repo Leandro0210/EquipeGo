@@ -1,4 +1,3 @@
-
 #include "dispatch/Dispatcher.hpp"
 
 #include "core/Clock.hpp"
@@ -11,6 +10,7 @@
 #include <cstdint>
 #include <deque>
 #include <exception>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -34,14 +34,10 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
   while (!stopRequested.load()) {
 
-    // =========================================
-    // 1. VERSION ACTUAL DEL CANAL
-    // =========================================
-
     const std::uint64_t observedVersion = signal->version();
 
     // =========================================
-    // 2. ESPERAR EL PRIMER PEDIDO
+    // ESPERAR PEDIDO
     // =========================================
 
     if (waiting.empty()) {
@@ -55,7 +51,7 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
     }
 
     // =========================================
-    // 3. RECUPERAR PEDIDOS DISPONIBLES
+    // RECUPERAR PEDIDOS DISPONIBLES
     // =========================================
 
     while (!stopRequested.load()) {
@@ -69,14 +65,13 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
     }
 
     // =========================================
-    // 4. EVALUAR PEDIDOS
+    // EVALUAR PEDIDOS
     // =========================================
 
     for (auto it = waiting.begin();
          it != waiting.end() && !stopRequested.load();) {
 
       Order &order = *it;
-
       const std::string orderId = order.orderId;
 
       const long long expirationTime =
@@ -85,7 +80,7 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       const long long now = clock.getSimulatedTimeMs();
 
       // =====================================
-      // PEDIDO VENCIDO
+      // RECHAZO POR TIMEOUT
       // =====================================
 
       if (now >= expirationTime) {
@@ -108,7 +103,7 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       }
 
       // =====================================
-      // COTIZAR Y BUSCAR REPARTIDOR
+      // COTIZAR Y ASIGNAR
       // =====================================
 
       bool assigned = false;
@@ -135,12 +130,8 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
           Courier &courier = fleet.at(quote.courierIndex);
 
-          // El evento se registra DENTRO de
-          // tryAssignOrder(), mientras la
-          // moto sigue protegida por su mutex.
-          //
-          // No se registra nada si la moto
-          // rechaza la asignacion.
+          // El callback se ejecuta antes de
+          // despertar al hilo del repartidor.
           const auto onAssigned = [&logger, &clock, &orderId, &quote]() {
             logger.logEvent({{"event", "orderAssigned"},
                              {"order", orderId},
@@ -156,29 +147,20 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
           }
         }
 
-      } catch (const std::exception &e) {
+      } catch (const std::exception &error) {
 
-        logger.logEvent({{"event", "dispatchError"},
-                         {"order", orderId},
-                         {"message", e.what()}},
-                        clock.getSimulatedTimeMs());
+        // No agregar nombres de eventos fuera
+        // de la lista permitida de DP7.
+        std::cerr << "Error despachando " << orderId << ": " << error.what()
+                  << '\n';
       }
-
-      // =====================================
-      // ASIGNACION EXITOSA
-      // =====================================
 
       if (assigned) {
 
         orderBook.completeTaken();
-
         it = waiting.erase(it);
         continue;
       }
-
-      // =====================================
-      // SEGUIR CON OTROS PEDIDOS
-      // =====================================
 
       ++it;
     }
@@ -192,7 +174,7 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
     }
 
     // =========================================
-    // 5. VENCIMIENTO MAS PROXIMO
+    // VENCIMIENTO MAS PROXIMO
     // =========================================
 
     long long earliestExpiration =
@@ -214,10 +196,6 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       continue;
     }
 
-    // =========================================
-    // 6. CONVERSION A TIEMPO REAL
-    // =========================================
-
     const double remainingRealMs =
         static_cast<double>(remainingSimulatedMs) / config.simulation.timeScale;
 
@@ -227,29 +205,23 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
     const auto deadline = std::chrono::steady_clock::now() + realWait;
 
-    // =========================================
-    // 7. ESPERA SIN BUSY WAITING
-    // =========================================
-
+    // Esperar sin busy waiting.
     signal->waitUntilChange(observedVersion, deadline, stopRequested);
   }
 
-  // =================================================
-  // 8. PEDIDOS PENDIENTES AL APAGAR
-  // =================================================
+  // ============================================
+  // PENDIENTES AL APAGAR
+  // ============================================
 
   for (Order &order : waiting) {
 
     if (!order.transitionTo(OrderState::Pending)) {
-
       throw std::logic_error("No se pudo finalizar pedido: " + order.orderId);
     }
 
-    logger.logEvent({{"event", "orderPending"}, {"order", order.orderId}},
-                    clock.getSimulatedTimeMs());
-
+    // No existe un evento orderPending en
+    // la especificacion oficial de DP7.
     ++pendingCount;
-
     orderBook.completeTaken();
   }
 }

@@ -1,4 +1,3 @@
-
 #include "core/Logger.hpp"
 
 #include <algorithm>
@@ -10,8 +9,9 @@
 // CONSTRUCTOR
 // =====================================================
 
-EventLogger::EventLogger(const std::string &filename)
-    : fileStream(filename, std::ios::out | std::ios::trunc) {
+EventLogger::EventLogger(const std::string &filename, bool emitToStdout)
+    : fileStream(filename, std::ios::out | std::ios::trunc),
+      emitToStdout(emitToStdout) {
 
   if (!fileStream.is_open()) {
     throw std::runtime_error("No se pudo abrir el archivo de eventos: " +
@@ -20,26 +20,21 @@ EventLogger::EventLogger(const std::string &filename)
 }
 
 // =====================================================
-// DP7: LINEA DE INICIO OBLIGATORIA
+// DP7: MENSAJE INICIAL
 // =====================================================
 
 void EventLogger::logStart() {
+  std::lock_guard<std::mutex> lock(logMutex);
 
-  // El texto debe coincidir exactamente
-  // con la especificacion.
   std::cout << "Simulation has started...\n" << std::flush;
 }
 
 // =====================================================
-// DP7: ESCRITURA CONCURRENTE DE EVENTOS JSONL
+// DP7: REGISTRO CONCURRENTE JSONL
 // =====================================================
 
 void EventLogger::logEvent(nlohmann::json eventJson,
                            long long simulatedTimeMs) {
-
-  // =========================================
-  // 1. VALIDAR EL EVENTO
-  // =========================================
 
   if (!eventJson.is_object()) {
     throw std::invalid_argument("El evento debe ser un objeto JSON");
@@ -56,15 +51,12 @@ void EventLogger::logEvent(nlohmann::json eventJson,
     throw std::invalid_argument("El tiempo simulado no puede ser negativo");
   }
 
-  // Algunos eventos, como courierBreakdown
-  // o simulationStopping, no tienen pedido.
   std::string orderId;
   bool hasOrder = false;
 
   const auto orderIt = eventJson.find("order");
 
   if (orderIt != eventJson.end()) {
-
     if (!orderIt->is_string()) {
       throw std::invalid_argument("El ID del pedido debe ser una cadena");
     }
@@ -78,20 +70,12 @@ void EventLogger::logEvent(nlohmann::json eventJson,
     hasOrder = true;
   }
 
-  // =========================================
-  // 2. PROTEGER TODA LA OPERACION
-  // =========================================
-
+  // Toda la escritura queda protegida.
   std::lock_guard<std::mutex> lock(logMutex);
 
   long long eventTime = simulatedTimeMs;
 
-  // =========================================
-  // 3. GARANTIZAR TIEMPO MONOTONO
-  // =========================================
-
   if (hasOrder) {
-
     const auto previous = lastOrderTimeMs.find(orderId);
 
     if (previous != lastOrderTimeMs.end()) {
@@ -99,33 +83,43 @@ void EventLogger::logEvent(nlohmann::json eventJson,
     }
   }
 
-  // =========================================
-  // 4. COMPLETAR EL JSON
-  // =========================================
-
-  // El reloj que recibe el metodo es la
-  // fuente oficial del campo t.
   eventJson["t"] = eventTime;
 
-  // Serializar el objeto completo antes
-  // de comenzar a escribir la linea.
+  // El JSON se serializa antes de escribirlo.
   const std::string serialized = eventJson.dump();
 
-  // =========================================
-  // 5. ESCRIBIR UNA LINEA COMPLETA
-  // =========================================
-
+  // 1. Registro persistente.
   fileStream << serialized << '\n';
 
   if (!fileStream) {
     throw std::runtime_error("Error escribiendo el registro de eventos");
   }
 
-  // =========================================
-  // 6. ACTUALIZAR EL ULTIMO TIEMPO
-  // =========================================
+  // 2. Registro observable por stdout.
+  // Se escribe dentro del mismo mutex.
+  if (emitToStdout) {
+    std::cout << serialized << '\n' << std::flush;
+
+    if (!std::cout) {
+      throw std::runtime_error("Error escribiendo eventos en stdout");
+    }
+  }
 
   if (hasOrder) {
     lastOrderTimeMs[orderId] = eventTime;
+  }
+}
+
+// =====================================================
+// DP7: FINALIZAR ESCRITURA DEL REGISTRO
+// =====================================================
+
+void EventLogger::flush() {
+  std::lock_guard<std::mutex> lock(logMutex);
+
+  fileStream.flush();
+
+  if (!fileStream) {
+    throw std::runtime_error("No se pudo completar la escritura del JSONL");
   }
 }
