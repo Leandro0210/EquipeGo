@@ -52,7 +52,7 @@ if(NOT nlohmann_json_FOUND)
 endif()
 
 # =====================================================
-# CONFIGURACION COMPARTIDA
+# CONFIGURACION COMPARTIDA DE TARGETS
 # =====================================================
 
 function(configure_equipego_target TARGET_NAME)
@@ -133,12 +133,26 @@ add_executable(
 configure_equipego_target(delivery_sim)
 
 # =====================================================
+# DP8.1 - VISOR DEL MAPA ORIGINAL
+# =====================================================
+
+add_executable(
+    map_preview
+
+    src/visualization/map_preview.cpp
+    src/visualization/MapViewer.cpp
+    src/config/ConfigLoader.cpp
+)
+
+configure_equipego_target(map_preview)
+
+# =====================================================
 # TESTS AUTOMATICOS
 # =====================================================
 
 enable_testing()
 
-set(DP7_TEST_NAMES)
+set(DP_TEST_NAMES)
 
 # -----------------------------------------------------
 # TEST 1: LOGGER JSONL CONCURRENTE
@@ -158,7 +172,7 @@ add_test(
     COMMAND test_event_logger
 )
 
-list(APPEND DP7_TEST_NAMES test_event_logger)
+list(APPEND DP_TEST_NAMES test_event_logger)
 
 # =====================================================
 # FUENTES COMPARTIDAS DE TESTS DE COURIER
@@ -192,7 +206,7 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
 )
 
-list(APPEND DP7_TEST_NAMES test_assignment_callback)
+list(APPEND DP_TEST_NAMES test_assignment_callback)
 
 # -----------------------------------------------------
 # TEST 3: CICLO DE VIDA
@@ -213,7 +227,7 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
 )
 
-list(APPEND DP7_TEST_NAMES test_courier_lifecycle_events)
+list(APPEND DP_TEST_NAMES test_courier_lifecycle_events)
 
 # -----------------------------------------------------
 # TEST 4: AVERIAS Y REASIGNACIONES
@@ -235,7 +249,7 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
 )
 
-list(APPEND DP7_TEST_NAMES test_incident_events)
+list(APPEND DP_TEST_NAMES test_incident_events)
 
 # -----------------------------------------------------
 # TEST 5: ERROR DE ESCRITURA EN LINUX
@@ -257,16 +271,38 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         COMMAND test_logger_write_failure
     )
 
-    list(APPEND DP7_TEST_NAMES test_logger_write_failure)
+    list(APPEND DP_TEST_NAMES test_logger_write_failure)
 
 endif()
 
+# -----------------------------------------------------
+# TEST 6: MAPA ORIGINAL EQUIPETROL
+# -----------------------------------------------------
+
+add_executable(
+    test_map_viewer
+
+    tests/test_map_viewer.cpp
+    src/visualization/MapViewer.cpp
+    src/config/ConfigLoader.cpp
+)
+
+configure_equipego_target(test_map_viewer)
+
+add_test(
+    NAME test_map_viewer
+    COMMAND test_map_viewer
+            ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
+)
+
+list(APPEND DP_TEST_NAMES test_map_viewer)
+
 # =====================================================
-# LIMITES DE TIEMPO
+# LIMITES DE TIEMPO DE TESTS
 # =====================================================
 
 set_tests_properties(
-    ${DP7_TEST_NAMES}
+    ${DP_TEST_NAMES}
 
     PROPERTIES
     TIMEOUT 30
