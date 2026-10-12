@@ -1,3 +1,4 @@
+
 #include "core/Logger.hpp"
 
 #include <algorithm>
@@ -20,7 +21,7 @@ EventLogger::EventLogger(const std::string &filename, bool emitToStdout)
 }
 
 // =====================================================
-// DP7: MENSAJE INICIAL
+// DP7: MENSAJE DE INICIO
 // =====================================================
 
 void EventLogger::logStart() {
@@ -35,6 +36,10 @@ void EventLogger::logStart() {
 
 void EventLogger::logEvent(nlohmann::json eventJson,
                            long long simulatedTimeMs) {
+
+  // =========================================
+  // VALIDAR EVENTO
+  // =========================================
 
   if (!eventJson.is_object()) {
     throw std::invalid_argument("El evento debe ser un objeto JSON");
@@ -57,6 +62,7 @@ void EventLogger::logEvent(nlohmann::json eventJson,
   const auto orderIt = eventJson.find("order");
 
   if (orderIt != eventJson.end()) {
+
     if (!orderIt->is_string()) {
       throw std::invalid_argument("El ID del pedido debe ser una cadena");
     }
@@ -70,12 +76,16 @@ void EventLogger::logEvent(nlohmann::json eventJson,
     hasOrder = true;
   }
 
-  // Toda la escritura queda protegida.
+  // =========================================
+  // BLOQUEO DEL LOGGER COMPARTIDO
+  // =========================================
+
   std::lock_guard<std::mutex> lock(logMutex);
 
   long long eventTime = simulatedTimeMs;
 
   if (hasOrder) {
+
     const auto previous = lastOrderTimeMs.find(orderId);
 
     if (previous != lastOrderTimeMs.end()) {
@@ -85,25 +95,38 @@ void EventLogger::logEvent(nlohmann::json eventJson,
 
   eventJson["t"] = eventTime;
 
-  // El JSON se serializa antes de escribirlo.
+  // Serializar antes de escribir.
   const std::string serialized = eventJson.dump();
 
-  // 1. Registro persistente.
+  // =========================================
+  // ESCRIBIR EN ARCHIVO
+  // =========================================
+
+  // Los errores de I/O de std::ofstream se
+  // conservan en el estado del stream.
+  //
+  // No lanzamos una excepcion aqui por I/O:
+  // este metodo es llamado desde hilos de
+  // repartidores, productor y dispatcher.
+  //
+  // Un fallo de disco no debe terminar el
+  // proceso mediante std::terminate().
   fileStream << serialized << '\n';
 
-  if (!fileStream) {
-    throw std::runtime_error("Error escribiendo el registro de eventos");
-  }
+  // =========================================
+  // EMITIR TAMBIEN A STDOUT
+  // =========================================
 
-  // 2. Registro observable por stdout.
-  // Se escribe dentro del mismo mutex.
   if (emitToStdout) {
-    std::cout << serialized << '\n' << std::flush;
 
-    if (!std::cout) {
-      throw std::runtime_error("Error escribiendo eventos en stdout");
-    }
+    // Conservamos los eventos observables
+    // mientras el stream de salida funcione.
+    std::cout << serialized << '\n' << std::flush;
   }
+
+  // =========================================
+  // ACTUALIZAR ULTIMA MARCA DE TIEMPO
+  // =========================================
 
   if (hasOrder) {
     lastOrderTimeMs[orderId] = eventTime;
@@ -111,15 +134,32 @@ void EventLogger::logEvent(nlohmann::json eventJson,
 }
 
 // =====================================================
-// DP7: FINALIZAR ESCRITURA DEL REGISTRO
+// DP7: VALIDAR ESCRITURAS AL FINALIZAR
 // =====================================================
 
 void EventLogger::flush() {
+
   std::lock_guard<std::mutex> lock(logMutex);
 
+  // Aqui ya no deben existir hilos
+  // escribiendo eventos.
   fileStream.flush();
 
+  // El error puede haberse producido
+  // durante una escritura anterior o
+  // precisamente durante este flush.
   if (!fileStream) {
     throw std::runtime_error("No se pudo completar la escritura del JSONL");
+  }
+
+  // Detectar tambien errores acumulados
+  // durante la emision de eventos a stdout.
+  if (emitToStdout) {
+
+    std::cout.flush();
+
+    if (!std::cout) {
+      throw std::runtime_error("No se pudo completar la escritura en stdout");
+    }
   }
 }

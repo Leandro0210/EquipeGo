@@ -52,7 +52,7 @@ if(NOT nlohmann_json_FOUND)
 endif()
 
 # =====================================================
-# CONFIGURACION COMPARTIDA DE TARGETS
+# CONFIGURACION COMPARTIDA
 # =====================================================
 
 function(configure_equipego_target TARGET_NAME)
@@ -133,10 +133,12 @@ add_executable(
 configure_equipego_target(delivery_sim)
 
 # =====================================================
-# DP7.4 - TESTS AUTOMATICOS
+# TESTS AUTOMATICOS
 # =====================================================
 
 enable_testing()
+
+set(DP7_TEST_NAMES)
 
 # -----------------------------------------------------
 # TEST 1: LOGGER JSONL CONCURRENTE
@@ -156,9 +158,11 @@ add_test(
     COMMAND test_event_logger
 )
 
-# -----------------------------------------------------
+list(APPEND DP7_TEST_NAMES test_event_logger)
+
+# =====================================================
 # FUENTES COMPARTIDAS DE TESTS DE COURIER
-# -----------------------------------------------------
+# =====================================================
 
 set(DP7_COURIER_TEST_SOURCES
 
@@ -188,8 +192,10 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
 )
 
+list(APPEND DP7_TEST_NAMES test_assignment_callback)
+
 # -----------------------------------------------------
-# TEST 3: CICLO DE VIDA DE PEDIDOS
+# TEST 3: CICLO DE VIDA
 # -----------------------------------------------------
 
 add_executable(
@@ -207,8 +213,10 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
 )
 
+list(APPEND DP7_TEST_NAMES test_courier_lifecycle_events)
+
 # -----------------------------------------------------
-# TEST 4: AVERIAS Y RESCATES ATOMICOS
+# TEST 4: AVERIAS Y REASIGNACIONES
 # -----------------------------------------------------
 
 add_executable(
@@ -227,15 +235,38 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
 )
 
+list(APPEND DP7_TEST_NAMES test_incident_events)
+
+# -----------------------------------------------------
+# TEST 5: ERROR DE ESCRITURA EN LINUX
+# -----------------------------------------------------
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+    add_executable(
+        test_logger_write_failure
+
+        tests/test_logger_write_failure.cpp
+        src/core/Logger.cpp
+    )
+
+    configure_equipego_target(test_logger_write_failure)
+
+    add_test(
+        NAME test_logger_write_failure
+        COMMAND test_logger_write_failure
+    )
+
+    list(APPEND DP7_TEST_NAMES test_logger_write_failure)
+
+endif()
+
 # =====================================================
-# LIMITES DE TIEMPO PARA EVITAR TESTS COLGADOS
+# LIMITES DE TIEMPO
 # =====================================================
 
 set_tests_properties(
-    test_event_logger
-    test_assignment_callback
-    test_courier_lifecycle_events
-    test_incident_events
+    ${DP7_TEST_NAMES}
 
     PROPERTIES
     TIMEOUT 30
