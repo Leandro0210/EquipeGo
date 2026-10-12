@@ -90,7 +90,9 @@ void Fleet::rescueLoop() {
         continue;
       }
 
-      if (source->getReservedCount() == 0) {
+      const std::size_t outgoing = source->getReservedCount();
+
+      if (outgoing == 0) {
         continue;
       }
 
@@ -109,6 +111,11 @@ void Fleet::rescueLoop() {
         // sobre ambas motos y comprueba
         // nuevamente estado y capacidad.
         if (source->transferAllTo(*recipient)) {
+
+          successfulRescues.fetch_add(1, std::memory_order_relaxed);
+
+          rescuedOrderCount.fetch_add(outgoing, std::memory_order_relaxed);
+
           break;
         }
       }
@@ -207,4 +214,24 @@ std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
   }
 
   return results;
+}
+
+std::size_t Fleet::getBreakdownCount() const {
+  std::size_t total = 0;
+
+  for (const auto &courier : couriers) {
+    if (courier->hasBrokenDown()) {
+      ++total;
+    }
+  }
+
+  return total;
+}
+
+std::size_t Fleet::getRescueCount() const noexcept {
+  return successfulRescues.load();
+}
+
+std::size_t Fleet::getRescuedOrderCount() const noexcept {
+  return rescuedOrderCount.load();
 }

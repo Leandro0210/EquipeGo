@@ -338,6 +338,7 @@ bool Courier::travelTo(const std::string &targetNode,
 
       if (breakdownHere) {
         state = CourierState::Broken;
+        everBroken = true;
       } else {
         currentNode = segment.to;
       }
@@ -670,4 +671,9 @@ std::string Courier::getCurrentNode() const {
 CourierState Courier::getState() const {
   std::lock_guard<std::mutex> lock(stateMutex);
   return state;
+}
+
+bool Courier::hasBrokenDown() const {
+  std::lock_guard<std::mutex> lock(stateMutex);
+  return everBroken;
 }

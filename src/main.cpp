@@ -245,6 +245,14 @@ int main(int argc, char *argv[]) {
 
     std::cout << "En OrderBook: " << bookPendingCount << '\n';
 
+    std::cout << "\n--- DP6 INCIDENTES Y RESCATES ---\n";
+
+    std::cout << "Motos averiadas: " << fleet.getBreakdownCount() << '\n';
+
+    std::cout << "Rescates exitosos: " << fleet.getRescueCount() << '\n';
+
+    std::cout << "Pedidos rescatados: " << fleet.getRescuedOrderCount() << '\n';
+
     std::cout << "\n--- AUDITORIA ---\n";
 
     std::cout << "Total contabilizado: " << totalFinalized << '\n';

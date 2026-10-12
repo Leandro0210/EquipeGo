@@ -37,6 +37,7 @@ private:
 
   std::string currentNode;
   CourierState state = CourierState::Idle;
+  bool everBroken = false;
 
   std::optional<std::string> destination;
   bool stopRequested = false;
@@ -83,6 +84,7 @@ public:
   std::string getId() const;
   std::string getCurrentNode() const;
   CourierState getState() const;
+  bool hasBrokenDown() const;
 
   std::vector<Order> takeFinishedOrders() {
     std::lock_guard<std::mutex> lock(stateMutex);

@@ -37,6 +37,9 @@ private:
   std::thread rescueThread;
   std::atomic<bool> rescueStopRequested{false};
 
+  std::atomic<std::size_t> successfulRescues{0};
+  std::atomic<std::size_t> rescuedOrderCount{0};
+
   bool started = false;
   bool rescueStarted = false;
 
@@ -69,4 +72,8 @@ public:
   std::shared_ptr<RestaurantManager> getRestaurantManager() const;
 
   std::vector<CourierOrderResult> takeFinishedOrders();
+
+  std::size_t getBreakdownCount() const;
+  std::size_t getRescueCount() const noexcept;
+  std::size_t getRescuedOrderCount() const noexcept;
 };
