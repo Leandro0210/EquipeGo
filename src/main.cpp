@@ -8,7 +8,12 @@
 #include "orders/OrderProducer.hpp"
 #include "visualization/SimulationDashboard.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cerrno>
+#include <climits>
+#include <csignal>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -23,6 +28,15 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
+#define EQUIPEGO_HAS_POSIX_SIGNALS 1
+#else
+#define EQUIPEGO_HAS_POSIX_SIGNALS 0
+#endif
 
 // =====================================================
 // DP7.3 - ESTADISTICAS DESDE EL REGISTRO REAL
@@ -203,12 +217,14 @@ struct RunOptions {
   double scale = 0.0;
   bool hasDuration = false;
   int duration = 0;
+  bool hasLogPath = false;
+  std::string logPath;
 };
 
 bool readOptions(int argc, char *argv[], RunOptions &options) {
   if (argc < 2) {
     std::cerr << "Uso: delivery_sim config.json [--gui|--headless] "
-                 "[--scale N] [--duration SEGUNDOS]\n";
+                 "[--scale N] [--duration SEGUNDOS] [--log RUTA]\n";
     return false;
   }
 
@@ -218,6 +234,13 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
       options.display = DisplayMode::Gui;
     } else if (argument == "--headless") {
       options.display = DisplayMode::Headless;
+    } else if (argument == "--log" && i + 1 < argc) {
+      options.logPath = argv[++i];
+      if (options.logPath.empty()) {
+        std::cerr << "Ruta de log vacia\n";
+        return false;
+      }
+      options.hasLogPath = true;
     } else if (argument == "--scale" && i + 1 < argc) {
       const std::string value = argv[++i];
       try {
@@ -237,13 +260,13 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
       try {
         std::size_t consumed = 0;
         options.duration = std::stoi(value, &consumed);
-        if (consumed != value.size() || options.duration < 1 ||
+        if (consumed != value.size() || options.duration < 0 ||
             options.duration > 86400) {
           throw std::invalid_argument("duracion fuera de rango");
         }
         options.hasDuration = true;
       } catch (const std::exception &) {
-        std::cerr << "Duracion invalida (1 a 86400 segundos simulados)\n";
+        std::cerr << "Duracion invalida (0 a 86400 segundos simulados)\n";
         return false;
       }
     } else {
@@ -253,6 +276,162 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
   }
   return true;
 }
+
+// =====================================================
+// DP9.1: SENAL ASINCRONA Y ESPERA SIN BUSY WAIT
+//
+// El manejador de senal NO adquiere mutex, no usa iostream,
+// no interactua con OpenCV y no detiene directamente hilos.
+// Solo marca un atomic<bool> lock-free y escribe en un pipe no bloqueante
+// (write es async-signal-safe en POSIX).
+// =====================================================
+
+// Operaciones lock-free: legales dentro de un handler y sin carrera entre hilos.
+static_assert(std::atomic<bool>::is_always_lock_free,
+              "El indicador de apagado debe ser lock-free");
+std::atomic<bool> gSignalStopRequested{false};
+
+#if EQUIPEGO_HAS_POSIX_SIGNALS
+volatile std::sig_atomic_t gSignalWakeWriteFd = -1;
+
+extern "C" void handleStopSignal(int) noexcept {
+  const int originalErrno = errno;
+  gSignalStopRequested.store(true, std::memory_order_relaxed);
+  const int descriptor = static_cast<int>(gSignalWakeWriteFd);
+  if (descriptor >= 0) {
+    const unsigned char wake = 1;
+    const ssize_t ignored = ::write(descriptor, &wake, sizeof(wake));
+    (void)ignored; // Con pipe lleno ya hay datos suficientes para despertar poll.
+  }
+  errno = originalErrno;
+}
+#else
+extern "C" void handleStopSignal(int) noexcept { gSignalStopRequested.store(true, std::memory_order_relaxed); }
+#endif
+
+class SignalStopController {
+public:
+  SignalStopController() {
+    gSignalStopRequested.store(false, std::memory_order_relaxed);
+#if EQUIPEGO_HAS_POSIX_SIGNALS
+    int descriptors[2] = {-1, -1};
+    if (::pipe(descriptors) != 0) {
+      throw std::runtime_error("No se pudo crear canal de senales");
+    }
+    readFd = descriptors[0];
+    writeFd = descriptors[1];
+
+    const int flags = ::fcntl(writeFd, F_GETFL, 0);
+    if (flags < 0 || ::fcntl(writeFd, F_SETFL, flags | O_NONBLOCK) < 0) {
+      closePipe();
+      throw std::runtime_error("No se pudo configurar canal de senales");
+    }
+    gSignalWakeWriteFd = static_cast<std::sig_atomic_t>(writeFd);
+
+    struct sigaction handlerAction {};
+    handlerAction.sa_handler = handleStopSignal;
+    ::sigemptyset(&handlerAction.sa_mask);
+    handlerAction.sa_flags = 0;
+
+    if (::sigaction(SIGINT, &handlerAction, &previousInt) != 0) {
+      gSignalWakeWriteFd = -1;
+      closePipe();
+      throw std::runtime_error("No se pudo instalar SIGINT");
+    }
+    intInstalled = true;
+    if (::sigaction(SIGTERM, &handlerAction, &previousTerm) != 0) {
+      ::sigaction(SIGINT, &previousInt, nullptr);
+      intInstalled = false;
+      gSignalWakeWriteFd = -1;
+      closePipe();
+      throw std::runtime_error("No se pudo instalar SIGTERM");
+    }
+    termInstalled = true;
+#else
+    previousInt = std::signal(SIGINT, handleStopSignal);
+    previousTerm = std::signal(SIGTERM, handleStopSignal);
+#endif
+  }
+
+  SignalStopController(const SignalStopController &) = delete;
+  SignalStopController &operator=(const SignalStopController &) = delete;
+
+  ~SignalStopController() {
+#if EQUIPEGO_HAS_POSIX_SIGNALS
+    if (termInstalled) ::sigaction(SIGTERM, &previousTerm, nullptr);
+    if (intInstalled) ::sigaction(SIGINT, &previousInt, nullptr);
+    gSignalWakeWriteFd = -1;
+    closePipe();
+#else
+    std::signal(SIGINT, previousInt);
+    std::signal(SIGTERM, previousTerm);
+#endif
+  }
+
+  bool stopRequested() const noexcept { return gSignalStopRequested.load(std::memory_order_relaxed); }
+
+  // La espera headless no necesita sondeo ni sleep_for repetitivo.
+  // poll() se despierta inmediatamente con SIGINT/SIGTERM, y
+  // el timeout restante controla la finalizacion por duracion.
+  void waitUntil(std::chrono::steady_clock::time_point deadline) const {
+#if EQUIPEGO_HAS_POSIX_SIGNALS
+    while (!stopRequested()) {
+      int timeoutMs = -1;
+      if (deadline != std::chrono::steady_clock::time_point::max()) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) return;
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)
+                .count();
+        // +1 evita despertar antes del deadline por redondeo.
+        timeoutMs = static_cast<int>(remaining >= INT_MAX - 1
+                                         ? INT_MAX
+                                         : remaining + 1);
+      }
+      struct pollfd descriptor {};
+      descriptor.fd = readFd;
+      descriptor.events = POLLIN;
+      const int result = ::poll(&descriptor, 1, timeoutMs);
+      if (result < 0 && errno != EINTR) {
+        throw std::runtime_error("Fallo esperando SIGINT/SIGTERM");
+      }
+      if (result > 0 && (descriptor.revents & (POLLERR | POLLNVAL))) {
+        throw std::runtime_error("Canal de senales no disponible");
+      }
+    }
+#else
+    // En sistemas no POSIX, se usa una espera acotada para poder
+    // observar std::signal. Las evaluaciones del proyecto son POSIX.
+    while (!stopRequested() &&
+           std::chrono::steady_clock::now() < deadline) {
+      const auto next = std::min(deadline, std::chrono::steady_clock::now() +
+                                              std::chrono::milliseconds(50));
+      std::this_thread::sleep_until(next);
+    }
+#endif
+  }
+
+private:
+#if EQUIPEGO_HAS_POSIX_SIGNALS
+  int readFd = -1;
+  int writeFd = -1;
+  bool intInstalled = false;
+  bool termInstalled = false;
+  struct sigaction previousInt {};
+  struct sigaction previousTerm {};
+
+  void closePipe() noexcept {
+    if (readFd >= 0) ::close(readFd);
+    if (writeFd >= 0) ::close(writeFd);
+    readFd = -1;
+    writeFd = -1;
+  }
+#else
+  using Handler = void (*)(int);
+  Handler previousInt = SIG_DFL;
+  Handler previousTerm = SIG_DFL;
+#endif
+};
 
 } // namespace
 
@@ -268,6 +447,7 @@ int main(int argc, char *argv[]) {
   char *configArgs[] = {argv[0], argv[1]};
   SimulationConfig config;
   if (!loadAndValidateConfig(2, configArgs, config)) return 1;
+  if (options.hasLogPath) config.logFilePath = options.logPath;
 
   const bool showGui =
       options.display == DisplayMode::Gui ||
@@ -284,6 +464,9 @@ int main(int argc, char *argv[]) {
   }
 
   try {
+    // Instalar manejadores antes de arrancar hilos del simulador.
+    SignalStopController signals;
+
     // =========================================
     // 1. CREAR COMPONENTES ORIGINALES
     // =========================================
@@ -332,32 +515,40 @@ int main(int argc, char *argv[]) {
     std::thread producerThread(&OrderProducer::run, &producer);
 
     // =========================================
-    // 5. VENTANA O ESPERA SIN INTERFAZ
+    // 5. ESPERAR FIN DE TIEMPO, GUI O SENAL
     // =========================================
-    if (config.simulation.durationS > 0) {
-      const double realDurationSeconds =
-          static_cast<double>(config.simulation.durationS) /
-          config.simulation.timeScale;
-      const auto deadline = std::chrono::steady_clock::now() +
-                            std::chrono::duration<double>(realDurationSeconds);
-      if (dashboard) {
-        while (std::chrono::steady_clock::now() < deadline) {
-          bool keepOpen = false;
-          try {
-            keepOpen = dashboard->frame(
-                fleet, logger.snapshotStats(), clock.getSimulatedTimeMs());
-          } catch (const std::exception &error) {
-            // Incluso un error grafico termina mediante cierre normal.
-            std::cerr << "Aviso DP8.5 (OpenCV): " << error.what() << '\n';
-          }
-          if (!keepOpen) break;
+    // durationS == 0: ejecutar hasta SIGINT, SIGTERM o cierre GUI.
+    // El deadline controla un maximo de tiempo, nunca una espera
+    // obligatoria luego de que llegue una senal.
+    const auto startTime = std::chrono::steady_clock::now();
+    const auto deadline = config.simulation.durationS > 0
+        ? startTime + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                          std::chrono::duration<double>(
+                              static_cast<double>(config.simulation.durationS) /
+                              config.simulation.timeScale))
+        : std::chrono::steady_clock::time_point::max();
+
+    if (dashboard) {
+      while (!signals.stopRequested() &&
+             std::chrono::steady_clock::now() < deadline) {
+        bool keepOpen = false;
+        try {
+          keepOpen = dashboard->frame(
+              fleet, logger.snapshotStats(), clock.getSimulatedTimeMs());
+        } catch (const std::exception &error) {
+          // Un error grafico tambien entra al cierre ordenado.
+          std::cerr << "Aviso DP9.1 (OpenCV): " << error.what() << '\n';
         }
-        dashboard->close();
-      } else {
-        std::this_thread::sleep_for(
-            std::chrono::duration<double>(realDurationSeconds));
+        if (!keepOpen) break;
       }
+      dashboard->close();
+    } else {
+      signals.waitUntil(deadline);
     }
+
+    // Se sale de este bloque por tiempo, senal o cierre de ventana.
+    // El hilo principal (NUNCA el manejador de senal) detiene y une
+    // los componentes siguiendo el orden de DP7.
 
     // =========================================
     // 6. DETENER PRODUCTOR
