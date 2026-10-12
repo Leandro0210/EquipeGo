@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "config/Config.hpp"
@@ -23,6 +22,23 @@
 class EventLogger;
 
 enum class CourierState { Idle, Moving, Broken };
+
+// DP8.4: solo valores copiados; no exponemos los pedidos mutables.
+struct CourierOrderSnapshot {
+  std::string orderId;
+  std::string restauranteId;
+  std::string deliveryNodeId;
+  OrderState state = OrderState::Created;
+};
+
+struct CourierSnapshot {
+  std::string id;
+  std::string currentNode;
+  CourierState state = CourierState::Idle;
+  std::optional<CourierOrderSnapshot> active;
+  std::optional<CourierOrderSnapshot> nextOrder;
+  std::size_t reservedCount = 0;
+};
 
 class Courier {
 private:
@@ -69,20 +85,14 @@ public:
           std::shared_ptr<CapacitySignal> capacitySignal = nullptr,
           std::shared_ptr<RestaurantManager> restaurantManager = nullptr);
 
-  // DP7.2: conectar el registro de eventos.
-  // Debe configurarse antes de asignar pedidos.
   void setEventLogger(EventLogger *logger);
-
   void run();
 
   bool assignDestination(const std::string &nodeId);
 
-  // DP7.2: la asignacion y su registro se
-  // realizan antes de despertar a la moto.
   bool tryAssignOrder(Order &&order,
                       const std::function<void()> &onAssigned = {});
 
-  // DP6: transferencia atomica de bolsa completa.
   bool transferAllTo(Courier &recipient);
 
   std::size_t getReservedCount() const;
@@ -99,6 +109,40 @@ public:
   CourierState getState() const;
   bool hasBrokenDown() const;
 
+  // DP8.4: leer identificador, nodo, fase y pedidos bajo UN mutex.
+  // Evita mezclar informacion de instantes diferentes dentro
+  // de la misma moto y nunca devuelve referencias a Order.
+  CourierSnapshot getSnapshot() const {
+    std::lock_guard<std::mutex> lock(stateMutex);
+
+    CourierSnapshot snapshot;
+    snapshot.id = id;
+    snapshot.currentNode = currentNode;
+    snapshot.state = state;
+    snapshot.reservedCount =
+        assignedOrders.size() + blockedOrders.size() +
+        (activeOrder ? 1u : 0u);
+
+    const auto copyOrder = [](const Order &order) {
+      CourierOrderSnapshot data;
+      data.orderId = order.orderId;
+      data.restauranteId = order.restauranteId;
+      data.deliveryNodeId = order.deliveryNodeId;
+      data.state = order.getState();
+      return data;
+    };
+
+    if (activeOrder) {
+      snapshot.active = copyOrder(*activeOrder);
+    }
+    if (!assignedOrders.empty()) {
+      snapshot.nextOrder = copyOrder(assignedOrders.front());
+    } else if (!blockedOrders.empty()) {
+      snapshot.nextOrder = copyOrder(blockedOrders.front());
+    }
+    return snapshot;
+  }
+
   std::vector<Order> takeFinishedOrders() {
     std::lock_guard<std::mutex> lock(stateMutex);
 
@@ -109,7 +153,6 @@ public:
       results.push_back(std::move(finishedOrders.front()));
       finishedOrders.pop_front();
     }
-
     return results;
   }
 };
