@@ -1,5 +1,7 @@
 
 #include "fleet/Courier.hpp"
+
+#include "core/Logger.hpp"
 #include "restaurants/PreparationTime.hpp"
 
 #include <algorithm>
@@ -24,6 +26,15 @@ Courier::Courier(std::string id, const SimulationConfig &config,
       capacitySignal(std::move(capacitySignal)),
       restaurantManager(std::move(restaurantManager)),
       currentNode(config.fleet.startNode) {}
+
+// =====================================================
+// DP7: CONECTAR EVENT LOGGER
+// =====================================================
+
+void Courier::setEventLogger(EventLogger *logger) {
+  std::lock_guard<std::mutex> lock(stateMutex);
+  eventLogger = logger;
+}
 
 // =====================================================
 // HILO PRINCIPAL
@@ -142,8 +153,8 @@ bool Courier::processActiveOrder() {
     return false;
   }
 
-  // Si un pedido rescatado ya fue recogido,
-  // no debe regresar al restaurante.
+  // Los pedidos rescatados que ya estan
+  // recogidos no regresan al restaurante.
   if (initialState == OrderState::Assigned) {
 
     const auto restaurant = std::find_if(
@@ -200,7 +211,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 3: CUPO FIFO
+    // ETAPA 3: CUPO FIFO DEL RESTAURANTE
     // =========================================
 
     std::optional<PickupGate::Permit> pickupPermit;
@@ -216,7 +227,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 4: RECOGER COMIDA
+    // ETAPA 4: COMENZAR Y FINALIZAR RECOGIDA
     // =========================================
 
     {
@@ -224,6 +235,17 @@ bool Courier::processActiveOrder() {
 
       if (stopRequested || !activeOrder) {
         return false;
+      }
+
+      // DP7.2: pickupStarted ocurre despues
+      // de conseguir el cupo del restaurante,
+      // antes del handoff de comida.
+      if (eventLogger) {
+        eventLogger->logEvent({{"event", "pickupStarted"},
+                               {"order", orderId},
+                               {"courier", id},
+                               {"restaurant", restaurantId}},
+                              clock.getSimulatedTimeMs());
       }
 
       const double realHandoffMs =
@@ -239,6 +261,16 @@ bool Courier::processActiveOrder() {
 
       if (!activeOrder->transitionTo(OrderState::PickedUp)) {
         return false;
+      }
+
+      // DP7.2: registrar la recogida exactamente
+      // cuando pasa a estado PickedUp.
+      if (eventLogger) {
+        eventLogger->logEvent({{"event", "orderPickedUp"},
+                               {"order", orderId},
+                               {"courier", id},
+                               {"restaurant", restaurantId}},
+                              clock.getSimulatedTimeMs());
       }
     }
 
@@ -258,7 +290,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 6: ENTREGAR
+  // ETAPA 6: ENTREGAR PEDIDO
   // =============================================
 
   {
@@ -267,6 +299,14 @@ bool Courier::processActiveOrder() {
     if (stopRequested || !activeOrder ||
         !activeOrder->transitionTo(OrderState::Delivered)) {
       return false;
+    }
+
+    // DP7.2: registrar la entrega al ocurrir,
+    // no durante el apagado de main().
+    if (eventLogger) {
+      eventLogger->logEvent(
+          {{"event", "orderDelivered"}, {"order", orderId}, {"courier", id}},
+          clock.getSimulatedTimeMs());
     }
 
     finishedOrders.push_back(std::move(*activeOrder));
@@ -364,7 +404,6 @@ bool Courier::travelTo(const std::string &targetNode,
 
 bool Courier::transferAllTo(Courier &recipient) {
 
-  // Nunca transferir hacia la misma moto.
   if (this == &recipient) {
     return false;
   }
@@ -372,12 +411,8 @@ bool Courier::transferAllTo(Courier &recipient) {
   bool transferred = false;
 
   {
-    // Bloquear los mutex de ambas motos.
-    // scoped_lock evita deadlocks por orden de locks.
     std::scoped_lock lock(stateMutex, recipient.stateMutex);
 
-    // La fuente debe estar averiada y
-    // la receptora debe seguir operativa.
     if (stopRequested || recipient.stopRequested ||
         state != CourierState::Broken ||
         recipient.state == CourierState::Broken) {
@@ -398,13 +433,11 @@ bool Courier::transferAllTo(Courier &recipient) {
     const std::size_t capacity =
         static_cast<std::size_t>(recipient.config.fleet.bagCapacity);
 
-    // No se admite transferencia parcial.
     if (recipientReserved > capacity ||
         outgoing > capacity - recipientReserved) {
       return false;
     }
 
-    // Comprobar IDs duplicados.
     const auto duplicate = [&recipient](const Order &order) {
       return recipient.hasOrderIdLocked(order.orderId);
     };
@@ -425,10 +458,8 @@ bool Courier::transferAllTo(Courier &recipient) {
       }
     }
 
-    // =========================================
-    // PREPARAR MEMORIA ANTES DE MOVER PEDIDOS
-    // =========================================
-
+    // Preparar toda la memoria antes de
+    // modificar cualquiera de las bolsas.
     std::deque<Order> staged;
 
     const std::size_t totalQueued = recipient.assignedOrders.size() + outgoing;
@@ -436,10 +467,6 @@ bool Courier::transferAllTo(Courier &recipient) {
     for (std::size_t i = 0; i < totalQueued; ++i) {
       staged.emplace_back("", "", "", 0);
     }
-
-    // =========================================
-    // TRANSFERENCIA BAJO AMBOS MUTEX
-    // =========================================
 
     auto position = staged.begin();
 
@@ -449,29 +476,28 @@ bool Courier::transferAllTo(Courier &recipient) {
       ++position;
     }
 
-    // Pedido activo de la moto averiada.
+    // Pedido activo de la averiada.
     if (activeOrder) {
       *position = std::move(*activeOrder);
       ++position;
     }
 
-    // Pedidos asignados de la moto averiada.
+    // Pedidos asignados.
     for (Order &order : assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Pedidos bloqueados de la moto averiada.
+    // Pedidos bloqueados.
     for (Order &order : blockedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Publicar toda la carga en una unica
-    // operacion protegida por ambos mutex.
+    // Publicar toda la bolsa de una vez,
+    // bajo los dos mutex.
     recipient.assignedOrders.swap(staged);
 
-    // Vaciar completamente la moto averiada.
     activeOrder.reset();
     assignedOrders.clear();
     blockedOrders.clear();
@@ -479,7 +505,6 @@ bool Courier::transferAllTo(Courier &recipient) {
     transferred = true;
   }
 
-  // Notificar despues de liberar los mutex.
   if (transferred) {
     recipient.workCv.notify_one();
 
@@ -496,6 +521,7 @@ bool Courier::transferAllTo(Courier &recipient) {
 // =====================================================
 
 bool Courier::assignDestination(const std::string &nodeId) {
+
   {
     std::lock_guard<std::mutex> lock(stateMutex);
 
@@ -532,10 +558,11 @@ bool Courier::hasOrderIdLocked(const std::string &orderId) const {
 }
 
 // =====================================================
-// ASIGNACION DE PEDIDOS
+// DP7: ASIGNACION CON REGISTRO PROTEGIDO
 // =====================================================
 
-bool Courier::tryAssignOrder(Order &&order) {
+bool Courier::tryAssignOrder(Order &&order,
+                             const std::function<void()> &onAssigned) {
 
   if (order.getState() != OrderState::Created) {
     return false;
@@ -567,12 +594,27 @@ bool Courier::tryAssignOrder(Order &&order) {
       return false;
     }
 
-    assignedOrders.push_back(std::move(order));
+    // Reservar posicion antes de registrar.
+    assignedOrders.emplace_back("", "", "", 0);
+
+    try {
+      if (onAssigned) {
+        onAssigned();
+      }
+    } catch (...) {
+      // El pedido original no fue movido.
+      assignedOrders.pop_back();
+      throw;
+    }
+
+    // Movimiento noexcept del pedido.
+    assignedOrders.back() = std::move(order);
 
     assignedOrders.back().transitionTo(OrderState::Assigned);
   }
 
   workCv.notify_one();
+
   return true;
 }
 
@@ -619,7 +661,6 @@ std::size_t Courier::getReservedCount() const {
 
 std::size_t Courier::getFinishedCount() const {
   std::lock_guard<std::mutex> lock(stateMutex);
-
   return finishedOrders.size();
 }
 

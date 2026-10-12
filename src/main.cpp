@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
   }
 
   try {
+
     // ============================================
     // 1. PREPARAR COMPONENTES
     // ============================================
@@ -53,10 +54,22 @@ int main(int argc, char *argv[]) {
     logger.logStart();
 
     // ============================================
-    // 2. INICIAR HILOS
+    // 2. INICIAR FLOTA Y CONECTAR LOGGER
     // ============================================
 
     fleet.start();
+
+    // DP7.2: todas las motos usaran
+    // el mismo EventLogger concurrente.
+    //
+    // Todavia no hay pedidos creados ni
+    // asignados, porque producer y
+    // dispatcher no han comenzado.
+    for (std::size_t i = 0; i < fleet.size(); ++i) {
+
+      fleet.at(i).setEventLogger(&logger);
+    }
+
     fleet.startRescue();
 
     std::cout << "Flota iniciada con " << fleet.size() << " repartidores.\n";
@@ -118,7 +131,7 @@ int main(int argc, char *argv[]) {
     fleet.join();
 
     // ============================================
-    // 7. CONTABILIZAR PEDIDOS DE FLEET
+    // 7. CONTABILIZAR PEDIDOS DE LA FLOTA
     // ============================================
 
     std::vector<CourierOrderResult> fleetResults = fleet.takeFinishedOrders();
@@ -134,32 +147,29 @@ int main(int argc, char *argv[]) {
 
       const Order &order = result.order;
 
-      // Verificar que un pedido no aparezca
-      // dos veces en los resultados de la flota.
       if (!fleetOrderIds.insert(order.orderId).second) {
 
         throw std::logic_error("Pedido duplicado en Fleet: " + order.orderId);
       }
 
-      // ----------------------------------------
+      // ========================================
       // PEDIDO ENTREGADO
-      // ----------------------------------------
+      // ========================================
 
       if (order.getState() == OrderState::Delivered) {
 
         ++deliveredCount;
 
-        logger.logEvent({{"event", "orderDelivered"},
-                         {"order", order.orderId},
-                         {"courier", result.courierId},
-                         {"recordedAtShutdown", true}},
-                        clock.getSimulatedTimeMs());
-
-        // ----------------------------------------
-        // PEDIDO PENDIENTE EN MOTO
-        // ----------------------------------------
+        // DP7.2:
+        // NO registrar aqui orderDelivered.
+        // La moto ya lo registro cuando
+        // ocurrio realmente la entrega.
 
       } else if (order.getState() == OrderState::Pending) {
+
+        // ======================================
+        // PEDIDO PENDIENTE
+        // ======================================
 
         ++fleetPendingCount;
 
@@ -211,16 +221,12 @@ int main(int argc, char *argv[]) {
     const std::size_t totalFinalized =
         deliveredCount + rejectedCount + pendingCount;
 
-    // Todos los pedidos asignados deben haber
-    // terminado en Fleet.
     const bool fleetComplete = fleetFinalizedCount == assignedCount;
 
-    // La suma de los estados finales debe ser
-    // igual al total de pedidos creados.
     const bool accountingComplete = totalFinalized == createdCount;
 
     // ============================================
-    // 10. RESUMEN FINAL
+    // 10. RESUMEN FINAL PROVISIONAL
     // ============================================
 
     std::cout << "\n=== RESUMEN FINAL EQUIPEGO ===\n";

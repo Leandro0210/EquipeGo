@@ -12,12 +12,15 @@
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
+
+class EventLogger;
 
 enum class CourierState { Idle, Moving, Broken };
 
@@ -31,6 +34,10 @@ private:
 
   std::shared_ptr<CapacitySignal> capacitySignal;
   std::shared_ptr<RestaurantManager> restaurantManager;
+
+  // DP7: referencia no propietaria al logger.
+  // El logger debe vivir mas que el repartidor.
+  EventLogger *eventLogger = nullptr;
 
   mutable std::mutex stateMutex;
   std::condition_variable workCv;
@@ -62,16 +69,20 @@ public:
           std::shared_ptr<CapacitySignal> capacitySignal = nullptr,
           std::shared_ptr<RestaurantManager> restaurantManager = nullptr);
 
+  // DP7.2: conectar el registro de eventos.
+  // Debe configurarse antes de asignar pedidos.
+  void setEventLogger(EventLogger *logger);
+
   void run();
 
   bool assignDestination(const std::string &nodeId);
 
-  bool tryAssignOrder(Order &&order);
+  // DP7.2: la asignacion y su registro se
+  // realizan antes de despertar a la moto.
+  bool tryAssignOrder(Order &&order,
+                      const std::function<void()> &onAssigned = {});
 
-  // DP6: transferencia atomica de la bolsa completa.
-  // Solo transfiere si la moto receptora tiene
-  // capacidad para recibir TODOS los pedidos.
-  // Si no puede, ambas bolsas quedan intactas.
+  // DP6: transferencia atomica de bolsa completa.
   bool transferAllTo(Courier &recipient);
 
   std::size_t getReservedCount() const;
@@ -96,7 +107,6 @@ public:
 
     while (!finishedOrders.empty()) {
       results.push_back(std::move(finishedOrders.front()));
-
       finishedOrders.pop_front();
     }
 
