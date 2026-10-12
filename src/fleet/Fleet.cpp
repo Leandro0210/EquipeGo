@@ -1,9 +1,16 @@
 
 #include "fleet/Fleet.hpp"
 
+#include <atomic>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
+
+// =====================================================
+// CONSTRUCTOR
+// =====================================================
 
 Fleet::Fleet(const SimulationConfig &config, const RoadNetwork &roadNetwork,
              SimulationClock &clock)
@@ -11,6 +18,10 @@ Fleet::Fleet(const SimulationConfig &config, const RoadNetwork &roadNetwork,
       capacitySignal(std::make_shared<CapacitySignal>()),
       restaurantManager(
           std::make_shared<RestaurantManager>(config.restaurants)) {}
+
+// =====================================================
+// DESTRUCTOR
+// =====================================================
 
 Fleet::~Fleet() {
   requestStop();
@@ -22,6 +33,7 @@ Fleet::~Fleet() {
 // =====================================================
 
 void Fleet::start() {
+
   if (started) {
     throw std::logic_error("La flota ya fue iniciada");
   }
@@ -35,6 +47,7 @@ void Fleet::start() {
     threads.reserve(count);
 
     for (std::size_t i = 0; i < count; ++i) {
+
       const std::string id = "c" + std::to_string(i);
 
       couriers.push_back(std::make_unique<Courier>(
@@ -57,6 +70,7 @@ void Fleet::start() {
 // =====================================================
 
 void Fleet::startRescue() {
+
   if (!started || rescueStarted || rescueStopRequested.load()) {
     throw std::logic_error("No se puede iniciar el rescate");
   }
@@ -67,56 +81,97 @@ void Fleet::startRescue() {
 }
 
 // =====================================================
-// HILO RESCATISTA
+// DP6: COORDINADOR DE RESCATE
 // =====================================================
 
 void Fleet::rescueLoop() {
+
+  // Solo el hilo rescatista accede a este
+  // vector, por eso no necesita otro mutex.
+  //
+  // Cada moto averiada se contabiliza una vez
+  // cuando consigue su primer rescate.
+  std::vector<bool> rescueRecorded(couriers.size(), false);
+
   while (!rescueStopRequested.load()) {
 
-    // Capturamos la version ANTES de
-    // examinar la flota. Si ocurre un cambio
-    // durante el examen, no perderemos
-    // esa notificacion.
+    // Capturar la version ANTES de examinar
+    // las motos evita perder notificaciones.
     const auto previousVersion = capacitySignal->version();
 
-    // Buscar motos averiadas.
-    for (const auto &source : couriers) {
+    // =========================================
+    // 1. BUSCAR MOTOS AVERIADAS
+    // =========================================
+
+    for (std::size_t sourceIndex = 0; sourceIndex < couriers.size();
+         ++sourceIndex) {
 
       if (rescueStopRequested.load()) {
         break;
       }
 
-      if (source->getState() != CourierState::Broken) {
+      Courier &source = *couriers[sourceIndex];
+
+      if (source.getState() != CourierState::Broken) {
         continue;
       }
 
-      const std::size_t outgoing = source->getReservedCount();
-
-      if (outgoing == 0) {
+      if (source.getReservedCount() == 0) {
         continue;
       }
 
-      // Buscar una receptora.
-      for (const auto &recipient : couriers) {
+      // =====================================
+      // 2. BUSCAR MOTOS RECEPTORAS
+      // =====================================
+
+      for (std::size_t recipientIndex = 0; recipientIndex < couriers.size();
+           ++recipientIndex) {
 
         if (rescueStopRequested.load()) {
           break;
         }
 
-        if (source.get() == recipient.get()) {
+        // Una moto no se rescata a si misma.
+        if (sourceIndex == recipientIndex) {
           continue;
         }
 
-        // transferAllTo utiliza scoped_lock
-        // sobre ambas motos y comprueba
-        // nuevamente estado y capacidad.
-        if (source->transferAllTo(*recipient)) {
+        Courier &recipient = *couriers[recipientIndex];
 
-          successfulRescues.fetch_add(1, std::memory_order_relaxed);
+        // =================================
+        // 3. TRANSFERIR PEDIDOS
+        // =================================
 
-          rescuedOrderCount.fetch_add(outgoing, std::memory_order_relaxed);
+        // Cada operacion exitosa mueve
+        // exactamente un pedido y reduce
+        // la carga pendiente de la averiada.
+        //
+        // El bucle termina cuando:
+        // - la fuente se queda sin pedidos;
+        // - el destino se llena;
+        // - el destino deja de ser valido;
+        // - se solicita apagar.
+        //
+        // No es busy waiting: cada vuelta
+        // debe completar una transferencia.
+        while (!rescueStopRequested.load() && source.transferOneTo(recipient)) {
 
-          break;
+          // Contar una sola vez la moto
+          // cuyo rescate fue iniciado.
+          if (!rescueRecorded[sourceIndex]) {
+            rescueRecorded[sourceIndex] = true;
+
+            successfulRescues.fetch_add(1, std::memory_order_relaxed);
+          }
+
+          // Cada pedido transferido cuenta
+          // una vez, aunque las transferencias
+          // sean hacia motos diferentes.
+          rescuedOrderCount.fetch_add(1, std::memory_order_relaxed);
+
+          // Publicar actualizacion para
+          // dispatcher y pruebas.
+          capacitySignal->notifyChange();
         }
       }
     }
@@ -125,9 +180,10 @@ void Fleet::rescueLoop() {
       break;
     }
 
-    // Sin busy waiting. Dormir hasta
-    // una averia, liberacion de capacidad,
-    // transferencia o apagado.
+    // =========================================
+    // 4. ESPERAR CAMBIOS SIN BUSY WAITING
+    // =========================================
+
     capacitySignal->waitForChange(previousVersion, rescueStopRequested);
   }
 }
@@ -137,12 +193,13 @@ void Fleet::rescueLoop() {
 // =====================================================
 
 void Fleet::requestStop() {
+
   rescueStopRequested.store(true);
 
   // Despertar al rescatista.
   capacitySignal->notifyChange();
 
-  // Despertar las colas de restaurantes.
+  // Despertar las colas FIFO de restaurantes.
   restaurantManager->requestStop();
 
   // Interrumpir recorridos y esperas.
@@ -151,15 +208,18 @@ void Fleet::requestStop() {
   }
 }
 
+// =====================================================
+// ESPERAR TERMINACION DE LOS HILOS
+// =====================================================
+
 void Fleet::join() {
 
-  // Primero finalizar el rescate:
-  // asi no hay nuevas transferencias
-  // mientras recolectamos resultados.
+  // Primero finalizar el hilo de rescate.
   if (rescueThread.joinable()) {
     rescueThread.join();
   }
 
+  // Luego finalizar todos los repartidores.
   for (std::thread &worker : threads) {
     if (worker.joinable()) {
       worker.join();
@@ -168,7 +228,7 @@ void Fleet::join() {
 }
 
 // =====================================================
-// CONSULTAS
+// CONSULTAS DE FLOTA
 // =====================================================
 
 std::size_t Fleet::size() const noexcept { return couriers.size(); }
@@ -184,7 +244,7 @@ std::shared_ptr<RestaurantManager> Fleet::getRestaurantManager() const {
 }
 
 // =====================================================
-// RESULTADOS FINALES
+// RECUPERAR RESULTADOS FINALES
 // =====================================================
 
 std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
@@ -204,6 +264,7 @@ std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
   std::vector<CourierOrderResult> results;
 
   for (const auto &courier : couriers) {
+
     const std::string courierId = courier->getId();
 
     std::vector<Order> finished = courier->takeFinishedOrders();
@@ -216,7 +277,12 @@ std::vector<CourierOrderResult> Fleet::takeFinishedOrders() {
   return results;
 }
 
+// =====================================================
+// DP6: CONTADOR DE MOTOS AVERIADAS
+// =====================================================
+
 std::size_t Fleet::getBreakdownCount() const {
+
   std::size_t total = 0;
 
   for (const auto &courier : couriers) {
@@ -228,9 +294,17 @@ std::size_t Fleet::getBreakdownCount() const {
   return total;
 }
 
+// =====================================================
+// DP6: CONTADOR DE RESCATES EXITOSOS
+// =====================================================
+
 std::size_t Fleet::getRescueCount() const noexcept {
   return successfulRescues.load();
 }
+
+// =====================================================
+// DP6: CONTADOR DE PEDIDOS RESCATADOS
+// =====================================================
 
 std::size_t Fleet::getRescuedOrderCount() const noexcept {
   return rescuedOrderCount.load();

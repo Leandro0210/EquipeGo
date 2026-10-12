@@ -142,9 +142,8 @@ bool Courier::processActiveOrder() {
     return false;
   }
 
-  // Si el pedido ya fue recogido por una moto
-  // que posteriormente se averio, no debemos
-  // regresar al restaurante ni repetir pickup.
+  // Un pedido rescatado en estado PickedUp
+  // no debe regresar al restaurante.
   if (initialState == OrderState::Assigned) {
 
     const auto restaurant = std::find_if(
@@ -201,7 +200,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 3: CUPO FIFO
+    // ETAPA 3: CUPO FIFO DEL RESTAURANTE
     // =========================================
 
     std::optional<PickupGate::Permit> pickupPermit;
@@ -217,7 +216,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 4: RECOGER COMIDA
+    // ETAPA 4: RECOGER PEDIDO
     // =========================================
 
     {
@@ -259,7 +258,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 6: ENTREGAR
+  // ETAPA 6: ENTREGAR PEDIDO
   // =============================================
 
   {
@@ -359,12 +358,11 @@ bool Courier::travelTo(const std::string &targetNode,
 }
 
 // =====================================================
-// DP6: TRANSFERENCIA ATOMICA
+// DP6: TRANSFERENCIA ATOMICA DE TODA LA CARGA
 // =====================================================
 
 bool Courier::transferAllTo(Courier &recipient) {
 
-  // Una moto nunca se transfiere a si misma.
   if (this == &recipient) {
     return false;
   }
@@ -372,11 +370,8 @@ bool Courier::transferAllTo(Courier &recipient) {
   bool transferred = false;
 
   {
-    // Bloquear ambos mutex sin depender del
-    // orden de las llamadas. Evita deadlocks.
     std::scoped_lock lock(stateMutex, recipient.stateMutex);
 
-    // Solo transferir desde motos averiadas.
     if (stopRequested || recipient.stopRequested ||
         state != CourierState::Broken ||
         recipient.state == CourierState::Broken) {
@@ -397,13 +392,12 @@ bool Courier::transferAllTo(Courier &recipient) {
     const std::size_t capacity =
         static_cast<std::size_t>(recipient.config.fleet.bagCapacity);
 
-    // No se acepta un traslado parcial.
     if (recipientReserved > capacity ||
         outgoing > capacity - recipientReserved) {
       return false;
     }
 
-    // Evitar IDs duplicados en el destino.
+    // Comprobar IDs duplicados.
     const auto duplicate = [&recipient](const Order &order) {
       return recipient.hasOrderIdLocked(order.orderId);
     };
@@ -424,16 +418,8 @@ bool Courier::transferAllTo(Courier &recipient) {
       }
     }
 
-    // =========================================
-    // PREPARAR TODA LA MEMORIA ANTES DE MOVER
-    // =========================================
-
-    // Order no admite copias. Preconstruimos
-    // posiciones temporales antes de tocar
-    // cualquier pedido real.
-    //
-    // Si una asignacion de memoria falla aqui,
-    // ambas motos permanecen sin cambios.
+    // Preparar todas las posiciones antes
+    // de modificar las bolsas originales.
     std::deque<Order> staged;
 
     const std::size_t totalQueued = recipient.assignedOrders.size() + outgoing;
@@ -442,50 +428,44 @@ bool Courier::transferAllTo(Courier &recipient) {
       staged.emplace_back("", "", "", 0);
     }
 
-    // =========================================
-    // MOVIMIENTO BAJO AMBOS MUTEX
-    // =========================================
-
     auto position = staged.begin();
 
-    // Conservar primero los pedidos que
-    // ya estaban esperando en el receptor.
+    // Primero los pedidos anteriores
+    // de la moto receptora.
     for (Order &order : recipient.assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Prioridad al pedido activo averiado.
+    // Luego el pedido activo de la averiada.
     if (activeOrder) {
       *position = std::move(*activeOrder);
       ++position;
     }
 
+    // Luego los pedidos asignados.
     for (Order &order : assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
+    // Finalmente los pedidos bloqueados.
     for (Order &order : blockedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Publicar toda la cola nueva con un
-    // solo intercambio, bajo ambos mutex.
+    // Publicar la nueva bolsa sin que otros
+    // hilos observen estados intermedios.
     recipient.assignedOrders.swap(staged);
 
-    // Quitar todas las referencias originales.
     activeOrder.reset();
     assignedOrders.clear();
     blockedOrders.clear();
 
-    // La moto fuente sigue Broken, pero vacia.
     transferred = true;
   }
 
-  // Despertar al receptor y avisar al despachador
-  // DESPUES de liberar los mutex.
   if (transferred) {
     recipient.workCv.notify_one();
 
@@ -495,6 +475,106 @@ bool Courier::transferAllTo(Courier &recipient) {
   }
 
   return transferred;
+}
+
+// =====================================================
+// DP6: TRANSFERENCIA ATOMICA DE UN PEDIDO
+// =====================================================
+
+bool Courier::transferOneTo(Courier &recipient) {
+
+  if (this == &recipient) {
+    return false;
+  }
+
+  {
+    // Bloqueamos ambas motos al mismo tiempo.
+    // std::scoped_lock evita ordenes circulares
+    // de adquisicion de mutex.
+    std::scoped_lock lock(stateMutex, recipient.stateMutex);
+
+    if (stopRequested || recipient.stopRequested ||
+        state != CourierState::Broken ||
+        recipient.state == CourierState::Broken) {
+      return false;
+    }
+
+    const std::size_t reserved = recipient.assignedOrders.size() +
+                                 recipient.blockedOrders.size() +
+                                 (recipient.activeOrder ? 1u : 0u);
+
+    const std::size_t capacity =
+        static_cast<std::size_t>(recipient.config.fleet.bagCapacity);
+
+    if (reserved >= capacity) {
+      return false;
+    }
+
+    // Elegir el pedido que se transferira.
+    // El activo tiene prioridad.
+    Order *candidate = nullptr;
+
+    enum class Origin { Active, Assigned, Blocked };
+
+    Origin origin = Origin::Active;
+
+    if (activeOrder) {
+      candidate = &*activeOrder;
+      origin = Origin::Active;
+    } else if (!assignedOrders.empty()) {
+      candidate = &assignedOrders.front();
+      origin = Origin::Assigned;
+    } else if (!blockedOrders.empty()) {
+      candidate = &blockedOrders.front();
+      origin = Origin::Blocked;
+    }
+
+    if (candidate == nullptr) {
+      return false;
+    }
+
+    const OrderState orderState = candidate->getState();
+
+    if (orderState != OrderState::Assigned &&
+        orderState != OrderState::PickedUp) {
+      return false;
+    }
+
+    if (recipient.hasOrderIdLocked(candidate->orderId)) {
+      return false;
+    }
+
+    // Order tiene constructor move noexcept.
+    // Si deque no puede reservar memoria,
+    // la insercion falla antes de publicar
+    // una transferencia completada.
+    recipient.assignedOrders.push_back(std::move(*candidate));
+
+    // Retirar el pedido del origen mientras
+    // los dos mutex siguen bloqueados.
+    switch (origin) {
+    case Origin::Active:
+      activeOrder.reset();
+      break;
+
+    case Origin::Assigned:
+      assignedOrders.pop_front();
+      break;
+
+    case Origin::Blocked:
+      blockedOrders.pop_front();
+      break;
+    }
+  }
+
+  // Despertar a la moto receptora.
+  recipient.workCv.notify_one();
+
+  if (recipient.capacitySignal) {
+    recipient.capacitySignal->notifyChange();
+  }
+
+  return true;
 }
 
 // =====================================================
@@ -541,6 +621,7 @@ bool Courier::hasOrderIdLocked(const std::string &orderId) const {
 // =====================================================
 
 bool Courier::tryAssignOrder(Order &&order) {
+
   if (order.getState() != OrderState::Created) {
     return false;
   }
@@ -585,6 +666,7 @@ bool Courier::tryAssignOrder(Order &&order) {
 // =====================================================
 
 void Courier::finishPendingLocked() {
+
   if (activeOrder) {
     activeOrder->transitionTo(OrderState::Pending);
 

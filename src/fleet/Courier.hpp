@@ -68,10 +68,15 @@ public:
 
   bool tryAssignOrder(Order &&order);
 
-  // DP6: transferencia atomica de toda la carga.
-  // Solo permite transferir desde una moto Broken
-  // hacia otra que tenga capacidad suficiente.
+  // DP6: mover toda la carga atomica a una moto.
+  // Falla si el destino no tiene capacidad
+  // para recibir todos los pedidos.
   bool transferAllTo(Courier &recipient);
+
+  // DP6: mover un solo pedido atomicamente.
+  // Permite distribuir la carga entre
+  // distintas motos con cupos disponibles.
+  bool transferOneTo(Courier &recipient);
 
   std::size_t getReservedCount() const;
   std::size_t getFinishedCount() const;
@@ -83,6 +88,7 @@ public:
 
   std::string getId() const;
   std::string getCurrentNode() const;
+
   CourierState getState() const;
   bool hasBrokenDown() const;
 
