@@ -53,11 +53,13 @@ function(configure_equipego_target TARGET_NAME)
 endfunction()
 
 # =====================================================
-# SIMULADOR PRINCIPAL: SIN CAMBIOS FUNCIONALES
+# SIMULADOR PRINCIPAL DP7 + INTERFAZ DP8.5
 # =====================================================
 
 set(SOURCES
     src/main.cpp
+    src/visualization/SimulationDashboard.cpp
+    src/visualization/MapViewer.cpp
     src/config/ConfigLoader.cpp
     src/core/Logger.cpp
     src/orders/OrderBook.cpp
@@ -213,5 +215,17 @@ add_test(NAME test_real_orders_preview
     ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json --check
 )
 list(APPEND DP_TEST_NAMES test_real_orders_preview)
+
+# =====================================================
+# DP8.5 - CONTADORES SEGUROS DEL JSONL EN VIVO
+# =====================================================
+
+add_executable(test_live_event_stats
+    tests/test_live_event_stats.cpp
+    src/core/Logger.cpp
+)
+configure_equipego_target(test_live_event_stats)
+add_test(NAME test_live_event_stats COMMAND test_live_event_stats)
+list(APPEND DP_TEST_NAMES test_live_event_stats)
 
 set_tests_properties(${DP_TEST_NAMES} PROPERTIES TIMEOUT 30)
