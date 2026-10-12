@@ -1,4 +1,3 @@
-
 #include "dispatch/Dispatcher.hpp"
 
 #include "core/Clock.hpp"
@@ -11,6 +10,7 @@
 #include <cstdint>
 #include <deque>
 #include <exception>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -21,34 +21,26 @@
 
 void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
                      SimulationClock &clock) {
+
   auto signal = fleet.getCapacitySignal();
 
   if (!signal) {
     throw std::runtime_error("Dispatcher sin CapacitySignal");
   }
 
-  // Ahora los pedidos nuevos tambien despiertan
-  // al Dispatcher mediante CapacitySignal.
   orderBook.setNotificationSignal(signal);
 
-  // Los pedidos siguen siendo move-only.
-  // Esta cola pertenece al hilo del Dispatcher.
   std::deque<Order> waiting;
 
   while (!stopRequested.load()) {
 
-    // ---------------------------------------------
-    // 1. GUARDAR VERSION ANTES DE CONSULTAR
-    // ---------------------------------------------
-
     const std::uint64_t observedVersion = signal->version();
 
-    // ---------------------------------------------
-    // 2. SI NO TENEMOS PEDIDOS, ESPERAR UNO
-    // ---------------------------------------------
+    // =========================================
+    // ESPERAR PEDIDO
+    // =========================================
 
     if (waiting.empty()) {
-
       std::optional<Order> first = orderBook.waitAndTake();
 
       if (!first) {
@@ -58,12 +50,11 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       waiting.push_back(std::move(*first));
     }
 
-    // ---------------------------------------------
-    // 3. INCORPORAR LOS OTROS PEDIDOS DISPONIBLES
-    // ---------------------------------------------
+    // =========================================
+    // RECUPERAR PEDIDOS DISPONIBLES
+    // =========================================
 
     while (!stopRequested.load()) {
-
       std::optional<Order> next = orderBook.tryTake();
 
       if (!next) {
@@ -73,15 +64,14 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       waiting.push_back(std::move(*next));
     }
 
-    // ---------------------------------------------
-    // 4. EVALUAR TODOS LOS PEDIDOS EN ESPERA
-    // ---------------------------------------------
+    // =========================================
+    // EVALUAR PEDIDOS
+    // =========================================
 
     for (auto it = waiting.begin();
          it != waiting.end() && !stopRequested.load();) {
 
       Order &order = *it;
-
       const std::string orderId = order.orderId;
 
       const long long expirationTime =
@@ -89,9 +79,9 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
       const long long now = clock.getSimulatedTimeMs();
 
-      // =========================================
-      // PEDIDO VENCIDO
-      // =========================================
+      // =====================================
+      // RECHAZO POR TIMEOUT
+      // =====================================
 
       if (now >= expirationTime) {
 
@@ -106,27 +96,25 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
         ++rejectedCount;
 
-        // Libera el cupo del libro de pedidos.
         orderBook.completeTaken();
 
         it = waiting.erase(it);
         continue;
       }
 
-      // =========================================
-      // COTIZAR Y BUSCAR REPARTIDOR
-      // =========================================
+      // =====================================
+      // COTIZAR Y ASIGNAR
+      // =====================================
 
       bool assigned = false;
 
       try {
+
         QuoteBatch batch = quoteCandidates(order);
 
-        // Mejor ETA primero.
         std::sort(batch.quotes.begin(), batch.quotes.end(),
                   [](const EtaQuote &a, const EtaQuote &b) {
                     if (a.etaSimulatedSeconds != b.etaSimulatedSeconds) {
-
                       return a.etaSimulatedSeconds < b.etaSimulatedSeconds;
                     }
 
@@ -135,8 +123,6 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
         for (const EtaQuote &quote : batch.quotes) {
 
-          // Volver a comprobar el tiempo
-          // despues del calculo ETA.
           if (stopRequested.load() ||
               clock.getSimulatedTimeMs() >= expirationTime) {
             break;
@@ -144,12 +130,16 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
           Courier &courier = fleet.at(quote.courierIndex);
 
-          if (courier.tryAssignOrder(std::move(order))) {
-
+          // El callback se ejecuta antes de
+          // despertar al hilo del repartidor.
+          const auto onAssigned = [&logger, &clock, &orderId, &quote]() {
             logger.logEvent({{"event", "orderAssigned"},
                              {"order", orderId},
                              {"courier", quote.courierId}},
                             clock.getSimulatedTimeMs());
+          };
+
+          if (courier.tryAssignOrder(std::move(order), onAssigned)) {
 
             ++assignedCount;
             assigned = true;
@@ -157,33 +147,21 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
           }
         }
 
-      } catch (const std::exception &e) {
+      } catch (const std::exception &error) {
 
-        logger.logEvent({{"event", "dispatchError"},
-                         {"order", orderId},
-                         {"message", e.what()}},
-                        clock.getSimulatedTimeMs());
+        // No agregar nombres de eventos fuera
+        // de la lista permitida de DP7.
+        std::cerr << "Error despachando " << orderId << ": " << error.what()
+                  << '\n';
       }
-
-      // =========================================
-      // ASIGNACION EXITOSA
-      // =========================================
 
       if (assigned) {
 
         orderBook.completeTaken();
-
-        // El pedido ya pertenece a Courier.
         it = waiting.erase(it);
         continue;
       }
 
-      // =========================================
-      // SIN REPARTIDOR: NO BLOQUEAR LOS DEMAS
-      // =========================================
-
-      // Conservamos este pedido, pero seguimos
-      // evaluando el siguiente.
       ++it;
     }
 
@@ -191,14 +169,13 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       break;
     }
 
-    // No hay pedidos esperando; volver al libro.
     if (waiting.empty()) {
       continue;
     }
 
-    // ---------------------------------------------
-    // 5. CALCULAR EL VENCIMIENTO MAS PROXIMO
-    // ---------------------------------------------
+    // =========================================
+    // VENCIMIENTO MAS PROXIMO
+    // =========================================
 
     long long earliestExpiration =
         waiting.front().time +
@@ -216,13 +193,8 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
         earliestExpiration - clock.getSimulatedTimeMs();
 
     if (remainingSimulatedMs <= 0) {
-      // Hay un vencimiento para procesar.
       continue;
     }
-
-    // ---------------------------------------------
-    // 6. PASAR A TIEMPO REAL
-    // ---------------------------------------------
 
     const double remainingRealMs =
         static_cast<double>(remainingSimulatedMs) / config.simulation.timeScale;
@@ -233,34 +205,23 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
     const auto deadline = std::chrono::steady_clock::now() + realWait;
 
-    // ---------------------------------------------
-    // 7. ESPERAR SIN BUSY WAITING
-    // ---------------------------------------------
-
-    // Despierta por:
-    // - un nuevo pedido
-    // - capacidad liberada por una moto
-    // - el vencimiento mas proximo
-    // - apagado de la simulacion
+    // Esperar sin busy waiting.
     signal->waitUntilChange(observedVersion, deadline, stopRequested);
   }
 
-  // =================================================
-  // 8. CERRAR LOS PEDIDOS QUE SIGUEN EN ESPERA
-  // =================================================
+  // ============================================
+  // PENDIENTES AL APAGAR
+  // ============================================
 
   for (Order &order : waiting) {
 
     if (!order.transitionTo(OrderState::Pending)) {
-
       throw std::logic_error("No se pudo finalizar pedido: " + order.orderId);
     }
 
-    logger.logEvent({{"event", "orderPending"}, {"order", order.orderId}},
-                    clock.getSimulatedTimeMs());
-
+    // No existe un evento orderPending en
+    // la especificacion oficial de DP7.
     ++pendingCount;
-
     orderBook.completeTaken();
   }
 }
@@ -270,12 +231,11 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 // =====================================================
 
 void Dispatcher::requestStop(OrderBook &orderBook) {
+
   stopRequested.store(true);
 
-  // Despertar si espera pedidos.
   orderBook.requestStop();
 
-  // Despertar si espera una moto disponible.
   auto signal = fleet.getCapacitySignal();
 
   if (signal) {

@@ -1,5 +1,7 @@
 
 #include "fleet/Courier.hpp"
+
+#include "core/Logger.hpp"
 #include "restaurants/PreparationTime.hpp"
 
 #include <algorithm>
@@ -24,6 +26,15 @@ Courier::Courier(std::string id, const SimulationConfig &config,
       capacitySignal(std::move(capacitySignal)),
       restaurantManager(std::move(restaurantManager)),
       currentNode(config.fleet.startNode) {}
+
+// =====================================================
+// DP7: CONECTAR EVENT LOGGER
+// =====================================================
+
+void Courier::setEventLogger(EventLogger *logger) {
+  std::lock_guard<std::mutex> lock(stateMutex);
+  eventLogger = logger;
+}
 
 // =====================================================
 // HILO PRINCIPAL
@@ -104,7 +115,6 @@ void Courier::run() {
 
     if (!delivered && activeOrder) {
       blockedOrders.push_back(std::move(*activeOrder));
-
       activeOrder.reset();
     }
 
@@ -142,8 +152,6 @@ bool Courier::processActiveOrder() {
     return false;
   }
 
-  // Si un pedido rescatado ya fue recogido,
-  // no debe regresar al restaurante.
   if (initialState == OrderState::Assigned) {
 
     const auto restaurant = std::find_if(
@@ -155,7 +163,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 1: VIAJAR AL RESTAURANTE
+    // VIAJAR AL RESTAURANTE
     // =========================================
 
     const auto restaurantBreakdown = incidents::makeBreakdownPlan(
@@ -167,7 +175,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 2: ESPERAR PREPARACION
+    // ESPERAR PREPARACION
     // =========================================
 
     const long long preparationMs =
@@ -200,14 +208,13 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 3: CUPO FIFO
+    // ADQUIRIR CUPO DE RECOGIDA
     // =========================================
 
     std::optional<PickupGate::Permit> pickupPermit;
 
     if (restaurantManager) {
       const auto gate = restaurantManager->gateFor(restaurantId);
-
       pickupPermit = gate->acquire();
 
       if (!pickupPermit) {
@@ -216,7 +223,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 4: RECOGER COMIDA
+    // COMENZAR Y FINALIZAR RECOGIDA
     // =========================================
 
     {
@@ -224,6 +231,14 @@ bool Courier::processActiveOrder() {
 
       if (stopRequested || !activeOrder) {
         return false;
+      }
+
+      if (eventLogger) {
+        eventLogger->logEvent({{"event", "pickupStarted"},
+                               {"order", orderId},
+                               {"courier", id},
+                               {"restaurant", restaurantId}},
+                              clock.getSimulatedTimeMs());
       }
 
       const double realHandoffMs =
@@ -240,13 +255,21 @@ bool Courier::processActiveOrder() {
       if (!activeOrder->transitionTo(OrderState::PickedUp)) {
         return false;
       }
+
+      if (eventLogger) {
+        eventLogger->logEvent({{"event", "orderPickedUp"},
+                               {"order", orderId},
+                               {"courier", id},
+                               {"restaurant", restaurantId}},
+                              clock.getSimulatedTimeMs());
+      }
     }
 
     pickupPermit.reset();
   }
 
   // =============================================
-  // ETAPA 5: VIAJAR AL CLIENTE
+  // VIAJAR AL CLIENTE
   // =============================================
 
   const auto customerBreakdown = incidents::makeBreakdownPlan(
@@ -258,7 +281,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 6: ENTREGAR
+  // ENTREGAR PEDIDO
   // =============================================
 
   {
@@ -269,8 +292,13 @@ bool Courier::processActiveOrder() {
       return false;
     }
 
-    finishedOrders.push_back(std::move(*activeOrder));
+    if (eventLogger) {
+      eventLogger->logEvent(
+          {{"event", "orderDelivered"}, {"order", orderId}, {"courier", id}},
+          clock.getSimulatedTimeMs());
+    }
 
+    finishedOrders.push_back(std::move(*activeOrder));
     activeOrder.reset();
   }
 
@@ -337,14 +365,32 @@ bool Courier::travelTo(const std::string &targetNode,
       }
 
       if (breakdownHere) {
+
+        // =====================================
+        // DP7.2: REGISTRAR AVERIA REAL
+        // =====================================
+
+        // Primero cambia el estado; despues
+        // registramos el evento, sin liberar
+        // el mutex de esta moto.
         state = CourierState::Broken;
         everBroken = true;
+
+        if (eventLogger) {
+          eventLogger->logEvent(
+              {{"event", "courierBreakdown"}, {"courier", id}},
+              clock.getSimulatedTimeMs());
+        }
+
       } else {
         currentNode = segment.to;
       }
     }
 
     if (breakdownHere) {
+
+      // El coordinador de rescate solamente
+      // se despierta despues del registro.
       if (capacitySignal) {
         capacitySignal->notifyChange();
       }
@@ -359,12 +405,12 @@ bool Courier::travelTo(const std::string &targetNode,
 }
 
 // =====================================================
-// DP6: TRANSFERENCIA ATOMICA DE TODA LA BOLSA
+// DP6: TRANSFERENCIA ATOMICA DE BOLSA COMPLETA
+// DP7: REGISTRO DE PEDIDOS REASIGNADOS
 // =====================================================
 
 bool Courier::transferAllTo(Courier &recipient) {
 
-  // Nunca transferir hacia la misma moto.
   if (this == &recipient) {
     return false;
   }
@@ -372,12 +418,10 @@ bool Courier::transferAllTo(Courier &recipient) {
   bool transferred = false;
 
   {
-    // Bloquear los mutex de ambas motos.
-    // scoped_lock evita deadlocks por orden de locks.
+    // Los dos mutex se adquieren sin
+    // riesgo de interbloqueo.
     std::scoped_lock lock(stateMutex, recipient.stateMutex);
 
-    // La fuente debe estar averiada y
-    // la receptora debe seguir operativa.
     if (stopRequested || recipient.stopRequested ||
         state != CourierState::Broken ||
         recipient.state == CourierState::Broken) {
@@ -398,13 +442,15 @@ bool Courier::transferAllTo(Courier &recipient) {
     const std::size_t capacity =
         static_cast<std::size_t>(recipient.config.fleet.bagCapacity);
 
-    // No se admite transferencia parcial.
     if (recipientReserved > capacity ||
         outgoing > capacity - recipientReserved) {
       return false;
     }
 
-    // Comprobar IDs duplicados.
+    // =========================================
+    // COMPROBAR DUPLICADOS
+    // =========================================
+
     const auto duplicate = [&recipient](const Order &order) {
       return recipient.hasOrderIdLocked(order.orderId);
     };
@@ -426,61 +472,105 @@ bool Courier::transferAllTo(Courier &recipient) {
     }
 
     // =========================================
-    // PREPARAR MEMORIA ANTES DE MOVER PEDIDOS
+    // PREPARAR MEMORIA ANTES DE TRANSFERIR
     // =========================================
 
     std::deque<Order> staged;
 
-    const std::size_t totalQueued = recipient.assignedOrders.size() + outgoing;
+    // Esta cantidad es importante: los pedidos
+    // que agreguemos despues de esta posicion
+    // son exactamente los pedidos rescatados.
+    const std::size_t previousQueued = recipient.assignedOrders.size();
+
+    const std::size_t totalQueued = previousQueued + outgoing;
 
     for (std::size_t i = 0; i < totalQueued; ++i) {
       staged.emplace_back("", "", "", 0);
     }
 
-    // =========================================
-    // TRANSFERENCIA BAJO AMBOS MUTEX
-    // =========================================
-
     auto position = staged.begin();
 
-    // Pedidos anteriores de la receptora.
+    // =========================================
+    // MOVER PEDIDOS ANTERIORES DE LA RECEPTORA
+    // =========================================
+
     for (Order &order : recipient.assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Pedido activo de la moto averiada.
+    // =========================================
+    // MOVER LA BOLSA COMPLETA DE LA AVERIADA
+    // =========================================
+
     if (activeOrder) {
       *position = std::move(*activeOrder);
       ++position;
     }
 
-    // Pedidos asignados de la moto averiada.
     for (Order &order : assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Pedidos bloqueados de la moto averiada.
     for (Order &order : blockedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Publicar toda la carga en una unica
-    // operacion protegida por ambos mutex.
+    // =========================================
+    // PUBLICAR LA TRANSFERENCIA COMPLETA
+    // =========================================
+
+    // El intercambio ocurre bajo los dos
+    // mutex; ningun observador puede leer
+    // las bolsas durante la operacion.
     recipient.assignedOrders.swap(staged);
 
-    // Vaciar completamente la moto averiada.
     activeOrder.reset();
     assignedOrders.clear();
     blockedOrders.clear();
 
+    // =========================================
+    // DP7.2: REGISTRAR CADA REASIGNACION
+    // =========================================
+
+    // Todavia mantenemos bloqueadas ambas
+    // motos. La receptora no puede procesar
+    // ningun pedido nuevo hasta que estos
+    // registros terminen.
+    //
+    // No se emiten eventos para transferencias
+    // rechazadas por falta de capacidad.
+    EventLogger *logger =
+        eventLogger != nullptr ? eventLogger : recipient.eventLogger;
+
+    if (logger) {
+
+      for (std::size_t i = previousQueued; i < recipient.assignedOrders.size();
+           ++i) {
+
+        const Order &order = recipient.assignedOrders[i];
+
+        logger->logEvent({{"event", "orderReassigned"},
+                          {"order", order.orderId},
+                          {"from", id},
+                          {"to", recipient.id}},
+                         clock.getSimulatedTimeMs());
+      }
+    }
+
     transferred = true;
   }
 
-  // Notificar despues de liberar los mutex.
+  // =========================================
+  // NOTIFICAR UNA TRANSFERENCIA EXITOSA
+  // =========================================
+
   if (transferred) {
+
+    // La receptora se despierta despues
+    // de escribir todos los eventos.
     recipient.workCv.notify_one();
 
     if (recipient.capacitySignal) {
@@ -496,6 +586,7 @@ bool Courier::transferAllTo(Courier &recipient) {
 // =====================================================
 
 bool Courier::assignDestination(const std::string &nodeId) {
+
   {
     std::lock_guard<std::mutex> lock(stateMutex);
 
@@ -532,10 +623,11 @@ bool Courier::hasOrderIdLocked(const std::string &orderId) const {
 }
 
 // =====================================================
-// ASIGNACION DE PEDIDOS
+// DP7: ASIGNACION CON REGISTRO PROTEGIDO
 // =====================================================
 
-bool Courier::tryAssignOrder(Order &&order) {
+bool Courier::tryAssignOrder(Order &&order,
+                             const std::function<void()> &onAssigned) {
 
   if (order.getState() != OrderState::Created) {
     return false;
@@ -567,12 +659,28 @@ bool Courier::tryAssignOrder(Order &&order) {
       return false;
     }
 
-    assignedOrders.push_back(std::move(order));
+    // Reservar posicion antes del registro.
+    assignedOrders.emplace_back("", "", "", 0);
+
+    try {
+      if (onAssigned) {
+        onAssigned();
+      }
+    } catch (...) {
+
+      // Si falla el callback, conservamos
+      // el pedido original sin mover.
+      assignedOrders.pop_back();
+      throw;
+    }
+
+    assignedOrders.back() = std::move(order);
 
     assignedOrders.back().transitionTo(OrderState::Assigned);
   }
 
   workCv.notify_one();
+
   return true;
 }
 
@@ -586,7 +694,6 @@ void Courier::finishPendingLocked() {
     activeOrder->transitionTo(OrderState::Pending);
 
     finishedOrders.push_back(std::move(*activeOrder));
-
     activeOrder.reset();
   }
 
@@ -594,7 +701,6 @@ void Courier::finishPendingLocked() {
     assignedOrders.front().transitionTo(OrderState::Pending);
 
     finishedOrders.push_back(std::move(assignedOrders.front()));
-
     assignedOrders.pop_front();
   }
 
@@ -602,7 +708,6 @@ void Courier::finishPendingLocked() {
     blockedOrders.front().transitionTo(OrderState::Pending);
 
     finishedOrders.push_back(std::move(blockedOrders.front()));
-
     blockedOrders.pop_front();
   }
 }
@@ -619,7 +724,6 @@ std::size_t Courier::getReservedCount() const {
 
 std::size_t Courier::getFinishedCount() const {
   std::lock_guard<std::mutex> lock(stateMutex);
-
   return finishedOrders.size();
 }
 
