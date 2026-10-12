@@ -142,7 +142,7 @@ bool Courier::processActiveOrder() {
     return false;
   }
 
-  // Un pedido rescatado en estado PickedUp
+  // Si un pedido rescatado ya fue recogido,
   // no debe regresar al restaurante.
   if (initialState == OrderState::Assigned) {
 
@@ -200,7 +200,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 3: CUPO FIFO DEL RESTAURANTE
+    // ETAPA 3: CUPO FIFO
     // =========================================
 
     std::optional<PickupGate::Permit> pickupPermit;
@@ -216,7 +216,7 @@ bool Courier::processActiveOrder() {
     }
 
     // =========================================
-    // ETAPA 4: RECOGER PEDIDO
+    // ETAPA 4: RECOGER COMIDA
     // =========================================
 
     {
@@ -258,7 +258,7 @@ bool Courier::processActiveOrder() {
   }
 
   // =============================================
-  // ETAPA 6: ENTREGAR PEDIDO
+  // ETAPA 6: ENTREGAR
   // =============================================
 
   {
@@ -287,6 +287,7 @@ bool Courier::processActiveOrder() {
 
 bool Courier::travelTo(const std::string &targetNode,
                        const incidents::BreakdownPlan *breakdown) {
+
   std::string origin;
 
   {
@@ -358,11 +359,12 @@ bool Courier::travelTo(const std::string &targetNode,
 }
 
 // =====================================================
-// DP6: TRANSFERENCIA ATOMICA DE TODA LA CARGA
+// DP6: TRANSFERENCIA ATOMICA DE TODA LA BOLSA
 // =====================================================
 
 bool Courier::transferAllTo(Courier &recipient) {
 
+  // Nunca transferir hacia la misma moto.
   if (this == &recipient) {
     return false;
   }
@@ -370,8 +372,12 @@ bool Courier::transferAllTo(Courier &recipient) {
   bool transferred = false;
 
   {
+    // Bloquear los mutex de ambas motos.
+    // scoped_lock evita deadlocks por orden de locks.
     std::scoped_lock lock(stateMutex, recipient.stateMutex);
 
+    // La fuente debe estar averiada y
+    // la receptora debe seguir operativa.
     if (stopRequested || recipient.stopRequested ||
         state != CourierState::Broken ||
         recipient.state == CourierState::Broken) {
@@ -392,6 +398,7 @@ bool Courier::transferAllTo(Courier &recipient) {
     const std::size_t capacity =
         static_cast<std::size_t>(recipient.config.fleet.bagCapacity);
 
+    // No se admite transferencia parcial.
     if (recipientReserved > capacity ||
         outgoing > capacity - recipientReserved) {
       return false;
@@ -418,8 +425,10 @@ bool Courier::transferAllTo(Courier &recipient) {
       }
     }
 
-    // Preparar todas las posiciones antes
-    // de modificar las bolsas originales.
+    // =========================================
+    // PREPARAR MEMORIA ANTES DE MOVER PEDIDOS
+    // =========================================
+
     std::deque<Order> staged;
 
     const std::size_t totalQueued = recipient.assignedOrders.size() + outgoing;
@@ -428,37 +437,41 @@ bool Courier::transferAllTo(Courier &recipient) {
       staged.emplace_back("", "", "", 0);
     }
 
+    // =========================================
+    // TRANSFERENCIA BAJO AMBOS MUTEX
+    // =========================================
+
     auto position = staged.begin();
 
-    // Primero los pedidos anteriores
-    // de la moto receptora.
+    // Pedidos anteriores de la receptora.
     for (Order &order : recipient.assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Luego el pedido activo de la averiada.
+    // Pedido activo de la moto averiada.
     if (activeOrder) {
       *position = std::move(*activeOrder);
       ++position;
     }
 
-    // Luego los pedidos asignados.
+    // Pedidos asignados de la moto averiada.
     for (Order &order : assignedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Finalmente los pedidos bloqueados.
+    // Pedidos bloqueados de la moto averiada.
     for (Order &order : blockedOrders) {
       *position = std::move(order);
       ++position;
     }
 
-    // Publicar la nueva bolsa sin que otros
-    // hilos observen estados intermedios.
+    // Publicar toda la carga en una unica
+    // operacion protegida por ambos mutex.
     recipient.assignedOrders.swap(staged);
 
+    // Vaciar completamente la moto averiada.
     activeOrder.reset();
     assignedOrders.clear();
     blockedOrders.clear();
@@ -466,6 +479,7 @@ bool Courier::transferAllTo(Courier &recipient) {
     transferred = true;
   }
 
+  // Notificar despues de liberar los mutex.
   if (transferred) {
     recipient.workCv.notify_one();
 
@@ -475,106 +489,6 @@ bool Courier::transferAllTo(Courier &recipient) {
   }
 
   return transferred;
-}
-
-// =====================================================
-// DP6: TRANSFERENCIA ATOMICA DE UN PEDIDO
-// =====================================================
-
-bool Courier::transferOneTo(Courier &recipient) {
-
-  if (this == &recipient) {
-    return false;
-  }
-
-  {
-    // Bloqueamos ambas motos al mismo tiempo.
-    // std::scoped_lock evita ordenes circulares
-    // de adquisicion de mutex.
-    std::scoped_lock lock(stateMutex, recipient.stateMutex);
-
-    if (stopRequested || recipient.stopRequested ||
-        state != CourierState::Broken ||
-        recipient.state == CourierState::Broken) {
-      return false;
-    }
-
-    const std::size_t reserved = recipient.assignedOrders.size() +
-                                 recipient.blockedOrders.size() +
-                                 (recipient.activeOrder ? 1u : 0u);
-
-    const std::size_t capacity =
-        static_cast<std::size_t>(recipient.config.fleet.bagCapacity);
-
-    if (reserved >= capacity) {
-      return false;
-    }
-
-    // Elegir el pedido que se transferira.
-    // El activo tiene prioridad.
-    Order *candidate = nullptr;
-
-    enum class Origin { Active, Assigned, Blocked };
-
-    Origin origin = Origin::Active;
-
-    if (activeOrder) {
-      candidate = &*activeOrder;
-      origin = Origin::Active;
-    } else if (!assignedOrders.empty()) {
-      candidate = &assignedOrders.front();
-      origin = Origin::Assigned;
-    } else if (!blockedOrders.empty()) {
-      candidate = &blockedOrders.front();
-      origin = Origin::Blocked;
-    }
-
-    if (candidate == nullptr) {
-      return false;
-    }
-
-    const OrderState orderState = candidate->getState();
-
-    if (orderState != OrderState::Assigned &&
-        orderState != OrderState::PickedUp) {
-      return false;
-    }
-
-    if (recipient.hasOrderIdLocked(candidate->orderId)) {
-      return false;
-    }
-
-    // Order tiene constructor move noexcept.
-    // Si deque no puede reservar memoria,
-    // la insercion falla antes de publicar
-    // una transferencia completada.
-    recipient.assignedOrders.push_back(std::move(*candidate));
-
-    // Retirar el pedido del origen mientras
-    // los dos mutex siguen bloqueados.
-    switch (origin) {
-    case Origin::Active:
-      activeOrder.reset();
-      break;
-
-    case Origin::Assigned:
-      assignedOrders.pop_front();
-      break;
-
-    case Origin::Blocked:
-      blockedOrders.pop_front();
-      break;
-    }
-  }
-
-  // Despertar a la moto receptora.
-  recipient.workCv.notify_one();
-
-  if (recipient.capacitySignal) {
-    recipient.capacitySignal->notifyChange();
-  }
-
-  return true;
 }
 
 // =====================================================
@@ -602,6 +516,7 @@ bool Courier::assignDestination(const std::string &nodeId) {
 // =====================================================
 
 bool Courier::hasOrderIdLocked(const std::string &orderId) const {
+
   if (activeOrder && activeOrder->orderId == orderId) {
     return true;
   }
@@ -704,11 +619,13 @@ std::size_t Courier::getReservedCount() const {
 
 std::size_t Courier::getFinishedCount() const {
   std::lock_guard<std::mutex> lock(stateMutex);
+
   return finishedOrders.size();
 }
 
 std::optional<OrderState>
 Courier::getAssignedOrderState(const std::string &orderId) const {
+
   std::lock_guard<std::mutex> lock(stateMutex);
 
   if (activeOrder && activeOrder->orderId == orderId) {
@@ -716,6 +633,7 @@ Courier::getAssignedOrderState(const std::string &orderId) const {
   }
 
   for (const auto *list : {&assignedOrders, &blockedOrders, &finishedOrders}) {
+
     for (const Order &order : *list) {
       if (order.orderId == orderId) {
         return order.getState();

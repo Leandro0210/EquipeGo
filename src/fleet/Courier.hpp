@@ -68,15 +68,11 @@ public:
 
   bool tryAssignOrder(Order &&order);
 
-  // DP6: mover toda la carga atomica a una moto.
-  // Falla si el destino no tiene capacidad
-  // para recibir todos los pedidos.
+  // DP6: transferencia atomica de la bolsa completa.
+  // Solo transfiere si la moto receptora tiene
+  // capacidad para recibir TODOS los pedidos.
+  // Si no puede, ambas bolsas quedan intactas.
   bool transferAllTo(Courier &recipient);
-
-  // DP6: mover un solo pedido atomicamente.
-  // Permite distribuir la carga entre
-  // distintas motos con cupos disponibles.
-  bool transferOneTo(Courier &recipient);
 
   std::size_t getReservedCount() const;
   std::size_t getFinishedCount() const;
