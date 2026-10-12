@@ -57,6 +57,7 @@ int main(int argc, char *argv[]) {
     // ============================================
 
     fleet.start();
+    fleet.startRescue();
 
     std::cout << "Flota iniciada con " << fleet.size() << " repartidores.\n";
 
@@ -243,6 +244,14 @@ int main(int argc, char *argv[]) {
     std::cout << "En Dispatcher: " << dispatcherPending << '\n';
 
     std::cout << "En OrderBook: " << bookPendingCount << '\n';
+
+    std::cout << "\n--- DP6 INCIDENTES Y RESCATES ---\n";
+
+    std::cout << "Motos averiadas: " << fleet.getBreakdownCount() << '\n';
+
+    std::cout << "Rescates exitosos: " << fleet.getRescueCount() << '\n';
+
+    std::cout << "Pedidos rescatados: " << fleet.getRescuedOrderCount() << '\n';
 
     std::cout << "\n--- AUDITORIA ---\n";
 

@@ -9,6 +9,7 @@
 #include "orders/Order.hpp"
 #include "restaurants/RestaurantManager.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -27,14 +28,22 @@ private:
   SimulationClock &clock;
 
   std::shared_ptr<CapacitySignal> capacitySignal;
-
-  // Administrador unico de restaurantes.
   std::shared_ptr<RestaurantManager> restaurantManager;
 
   std::vector<std::unique_ptr<Courier>> couriers;
   std::vector<std::thread> threads;
 
+  // DP6: coordinador de rescate.
+  std::thread rescueThread;
+  std::atomic<bool> rescueStopRequested{false};
+
+  std::atomic<std::size_t> successfulRescues{0};
+  std::atomic<std::size_t> rescuedOrderCount{0};
+
   bool started = false;
+  bool rescueStarted = false;
+
+  void rescueLoop();
 
 public:
   Fleet(const SimulationConfig &config, const RoadNetwork &roadNetwork,
@@ -46,6 +55,12 @@ public:
   Fleet &operator=(const Fleet &) = delete;
 
   void start();
+
+  // Iniciar el rescate automatico.
+  // Separado de start() para conservar
+  // los tests manuales de transferencia.
+  void startRescue();
+
   void requestStop();
   void join();
 
@@ -54,8 +69,11 @@ public:
 
   std::shared_ptr<CapacitySignal> getCapacitySignal() const;
 
-  // Para pruebas y futura visualizacion.
   std::shared_ptr<RestaurantManager> getRestaurantManager() const;
 
   std::vector<CourierOrderResult> takeFinishedOrders();
+
+  std::size_t getBreakdownCount() const;
+  std::size_t getRescueCount() const noexcept;
+  std::size_t getRescuedOrderCount() const noexcept;
 };
