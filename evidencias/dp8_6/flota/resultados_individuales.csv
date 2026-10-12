@@ -1,0 +1,16 @@
+couriers,repeat,duration_sim_s,time_scale,wall_s,created,delivered,rejected,pending,breakdowns,reassigned,queue_full,unreachable,no_courier,delivered_pct,rejected_pct,delivery_per_sim_hour,avg_delivery_ms,max_delivery_ms,trial_directory
+1,1,900,60.0,15.792,337,2,282,53,0,0,234,0,48,0.59,83.68,8.0,476874.5,616311,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_001/repeticion_01
+1,2,900,60.0,15.807,337,2,282,53,0,0,234,0,48,0.59,83.68,8.0,476833.5,616245,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_001/repeticion_02
+1,3,900,60.0,15.804,337,2,282,53,0,0,234,0,48,0.59,83.68,8.0,476900.5,616341,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_001/repeticion_03
+2,1,900,60.0,15.456,337,5,278,54,0,0,233,0,45,1.48,82.49,20.0,484274.8,717438,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_002/repeticion_01
+2,2,900,60.0,15.342,337,5,278,54,0,0,233,0,45,1.48,82.49,20.0,484325.8,717573,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_002/repeticion_02
+2,3,900,60.0,15.244,337,5,278,54,0,0,233,0,45,1.48,82.49,20.0,484292.0,717522,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_002/repeticion_03
+8,1,900,60.0,15.182,337,17,269,51,0,0,233,0,36,5.04,79.82,68.0,483169.65,863227,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_008/repeticion_01
+8,2,900,60.0,15.299,337,17,269,51,0,0,233,0,36,5.04,79.82,68.0,483146.88,863298,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_008/repeticion_02
+8,3,900,60.0,15.184,337,17,269,51,0,0,233,0,36,5.04,79.82,68.0,483119.94,863262,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_008/repeticion_03
+16,1,900,60.0,15.179,337,34,217,86,0,0,197,0,20,10.09,64.39,136.0,453537.15,863310,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_016/repeticion_01
+16,2,900,60.0,15.182,337,34,217,86,0,0,197,0,20,10.09,64.39,136.0,453556.91,863178,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_016/repeticion_02
+16,3,900,60.0,15.176,337,34,217,86,0,0,197,0,20,10.09,64.39,136.0,453538.97,863285,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_016/repeticion_03
+32,1,900,60.0,15.181,337,58,139,140,0,0,139,0,0,17.21,41.25,232.0,447182.74,863256,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_032/repeticion_01
+32,2,900,60.0,15.184,337,58,139,140,0,0,139,0,0,17.21,41.25,232.0,447193.72,863319,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_032/repeticion_02
+32,3,900,60.0,15.183,337,58,139,140,0,0,139,0,0,17.21,41.25,232.0,447201.33,863331,/home/leandro/equipego_benchmarks/dp8_6/20261012_181113/motos_032/repeticion_03

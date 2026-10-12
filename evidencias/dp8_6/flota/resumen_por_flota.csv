@@ -1,0 +1,6 @@
+couriers,repeats,wall_s_mean,created_mean,delivered_mean,rejected_mean,pending_mean,breakdowns_mean,reassigned_mean,queue_full_mean,unreachable_mean,no_courier_mean,delivered_pct_mean,rejected_pct_mean,delivery_per_sim_hour_mean,avg_delivery_ms_mean,wall_s_stdev
+1,3,15.801,337,2,282,53,0,0,234,0,48,0.59,83.68,8.0,476869.5,0.008
+2,3,15.347,337,5,278,54,0,0,233,0,45,1.48,82.49,20.0,484297.533,0.106
+8,3,15.222,337,17,269,51,0,0,233,0,36,5.04,79.82,68.0,483145.49,0.067
+16,3,15.179,337,34,217,86,0,0,197,0,20,10.09,64.39,136.0,453544.343,0.003
+32,3,15.183,337,58,139,140,0,0,139,0,0,17.21,41.25,232.0,447192.597,0.002
