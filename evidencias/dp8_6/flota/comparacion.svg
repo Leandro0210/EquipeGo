@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="950" height="472" viewBox="0 0 950 472" role="img" aria-label="Distribucion de pedidos por cantidad de motos">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="34" y="39" font-size="23" font-family="Arial" fill="#172735" font-weight="bold">EquipeGo · DP8.6 | Escalabilidad de flota</text>
+<text x="34" y="66" font-size="14" font-family="Arial" fill="#607386">Distribucion porcentual promedio al terminar cada simulacion</text>
+<text x="24" y="126" font-size="16" font-family="Arial" font-weight="bold" fill="#243746">1 motos</text>
+<rect x="118.00" y="105.00" width="3.99" height="30" fill="#248567"/>
+<rect x="121.99" y="105.00" width="562.33" height="30" fill="#dc725e"/>
+<rect x="684.31" y="105.00" width="105.69" height="30" fill="#96a8ba"/>
+<text x="804" y="126" font-size="13" font-family="Arial" fill="#314659">0.6% entregados</text>
+<text x="24" y="181" font-size="16" font-family="Arial" font-weight="bold" fill="#243746">2 motos</text>
+<rect x="118.00" y="160.00" width="9.97" height="30" fill="#248567"/>
+<rect x="127.97" y="160.00" width="554.35" height="30" fill="#dc725e"/>
+<rect x="682.32" y="160.00" width="107.68" height="30" fill="#96a8ba"/>
+<text x="804" y="181" font-size="13" font-family="Arial" fill="#314659">1.5% entregados</text>
+<text x="24" y="236" font-size="16" font-family="Arial" font-weight="bold" fill="#243746">8 motos</text>
+<rect x="118.00" y="215.00" width="33.90" height="30" fill="#248567"/>
+<rect x="151.90" y="215.00" width="536.40" height="30" fill="#dc725e"/>
+<rect x="688.30" y="215.00" width="101.70" height="30" fill="#96a8ba"/>
+<text x="804" y="236" font-size="13" font-family="Arial" fill="#314659">5.0% entregados</text>
+<text x="24" y="291" font-size="16" font-family="Arial" font-weight="bold" fill="#243746">16 motos</text>
+<rect x="118.00" y="270.00" width="67.80" height="30" fill="#248567"/>
+<rect x="185.80" y="270.00" width="432.71" height="30" fill="#dc725e"/>
+<rect x="618.51" y="270.00" width="171.49" height="30" fill="#96a8ba"/>
+<text x="804" y="291" font-size="13" font-family="Arial" fill="#314659">10.1% entregados</text>
+<text x="24" y="346" font-size="16" font-family="Arial" font-weight="bold" fill="#243746">32 motos</text>
+<rect x="118.00" y="325.00" width="115.66" height="30" fill="#248567"/>
+<rect x="233.66" y="325.00" width="277.18" height="30" fill="#dc725e"/>
+<rect x="510.83" y="325.00" width="279.17" height="30" fill="#96a8ba"/>
+<text x="804" y="346" font-size="13" font-family="Arial" fill="#314659">17.2% entregados</text>
+<rect x="118" y="428" width="15" height="15" fill="#248567"/>
+<text x="141" y="441" font-family="Arial" font-size="14" fill="#324b60">Entregados</text>
+<rect x="328" y="428" width="15" height="15" fill="#dc725e"/>
+<text x="351" y="441" font-family="Arial" font-size="14" fill="#324b60">Rechazados</text>
+<rect x="538" y="428" width="15" height="15" fill="#96a8ba"/>
+<text x="561" y="441" font-family="Arial" font-size="14" fill="#324b60">Pendientes</text>
+</svg>

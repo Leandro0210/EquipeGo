@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="450" viewBox="0 0 980 450" role="img" aria-label="Demanda y resultados de EquipeGo">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="35" y="38" font-size="22" font-family="Arial" fill="#172735" font-weight="bold">EquipeGo - DP8.6 | Demanda (8 motos)</text>
+<text x="35" y="65" font-size="14" font-family="Arial" fill="#607386">Distribucion promedio de pedidos al finalizar el tiempo simulado</text>
+<text x="25" y="125" font-size="16" font-family="Arial" fill="#203748">Baja</text>
+<rect x="150.00" y="105" width="225.45" height="30" fill="#27886b"/>
+<rect x="375.45" y="105" width="0.00" height="30" fill="#d66b58"/>
+<rect x="375.45" y="105" width="394.55" height="30" fill="#9aabb9"/>
+<text x="782" y="125" font-size="13" font-family="Arial" fill="#203748">11.0 pedidos</text>
+<text x="25" y="190" font-size="16" font-family="Arial" fill="#203748">Media</text>
+<rect x="150.00" y="170" width="194.86" height="30" fill="#27886b"/>
+<rect x="344.86" y="170" width="0.00" height="30" fill="#d66b58"/>
+<rect x="344.86" y="170" width="425.14" height="30" fill="#9aabb9"/>
+<text x="782" y="190" font-size="13" font-family="Arial" fill="#203748">35.0 pedidos</text>
+<text x="25" y="255" font-size="16" font-family="Arial" fill="#203748">Alta</text>
+<rect x="150.00" y="235" width="70.00" height="30" fill="#27886b"/>
+<rect x="220.00" y="235" width="180.00" height="30" fill="#d66b58"/>
+<rect x="400.00" y="235" width="370.00" height="30" fill="#9aabb9"/>
+<text x="782" y="255" font-size="13" font-family="Arial" fill="#203748">124.0 pedidos</text>
+<text x="25" y="320" font-size="16" font-family="Arial" fill="#203748">Extrema</text>
+<rect x="150.00" y="300" width="31.28" height="30" fill="#27886b"/>
+<rect x="181.28" y="300" width="494.90" height="30" fill="#d66b58"/>
+<rect x="676.17" y="300" width="93.83" height="30" fill="#9aabb9"/>
+<text x="782" y="320" font-size="13" font-family="Arial" fill="#203748">337.0 pedidos</text>
+<rect x="150" y="414" width="15" height="15" fill="#27886b"/>
+<text x="172" y="427" font-size="13" font-family="Arial" fill="#314558">Entregados</text>
+<rect x="360" y="414" width="15" height="15" fill="#d66b58"/>
+<text x="382" y="427" font-size="13" font-family="Arial" fill="#314558">Rechazados</text>
+<rect x="570" y="414" width="15" height="15" fill="#9aabb9"/>
+<text x="592" y="427" font-size="13" font-family="Arial" fill="#314558">Pendientes</text>
+</svg>
