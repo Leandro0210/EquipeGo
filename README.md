@@ -4,7 +4,7 @@
 
 EquipeGo simula una flota de repartidores independientes, un generador de pedidos por ráfagas, un despachador con cálculo concurrente de ETA, recursos de recogida limitados, averías y rescate de pedidos. La interfaz se dibuja con OpenCV sobre una imagen del mapa de Equipetrol. La corrección se contrasta con un registro JSONL y un resumen final.
 
-> **DP.12.8 (interfaz oficial):** `delivery_sim` acepta únicamente `config.json` y `--log RUTA`; siempre abre la ventana OpenCV. Para ensayos instrumentados se compila por separado `delivery_sim_bench`, que admite `--headless`, `--gui`, `--scale` y `--duration` sin alterar la interfaz evaluada. Los registros anteriores corresponden al commit `6ad35d1`; volver a validar la compilación final luego del cambio.
+> **Versión verificada de entrega:** código `0b51082` (rama `avance-12`); evidencias finales publicadas en `6dd487b`, sin cambios de código entre ambos commits. Se comprobó compilación desde clon limpio, 30/30 pruebas CTest y 12/12 ejecuciones con sanitizadores. `delivery_sim` acepta únicamente `config.json` y `--log RUTA`, y siempre abre OpenCV; `delivery_sim_bench` es un target auxiliar opcional para los experimentos.
 
 ## 1. Requisitos, dependencias y compilación (DP.0)
 
@@ -14,7 +14,7 @@ EquipeGo simula una flota de repartidores independientes, un generador de pedido
 - **JSON:** nlohmann/json, encontrado por CMake o descargado mediante `FetchContent` (alternativa configurada: v3.11.3).
 - **Hilos:** `Threads::Threads` de CMake; no se utilizan OpenMP, TBB, Boost.Asio, Boost.Thread ni hilos nativos directos.
 
-**Versiones registradas en el entorno de pruebas:** GCC 15.2.0 y OpenCV 4.10.0. Las versiones exactas de CMake, sistema operativo y bibliotecas de sanitización se encuentran en [`evidencias/dp11/`](evidencias/dp11/informe_final.md), dentro de cada `versiones_herramientas.json`.
+**Versiones registradas en el entorno de pruebas:** GCC 15.2.0 y OpenCV 4.10.0. La versión exacta de cada herramienta, los hashes de los binarios y los comandos de las 12 corridas instrumentadas finales constan en [`evidencias/dp12/auditoria_0b51082/`](evidencias/dp12/auditoria_0b51082/) (`tsan/versiones_herramientas.json`, `asan/versiones_herramientas.json` y `metadata.json`). El informe histórico también está en [`evidencias/dp11/`](evidencias/dp11/informe_final.md).
 
 Desde la raíz del repositorio, el comando exigido por la rúbrica es:
 
@@ -53,7 +53,7 @@ Límites registrados (grados decimales):
 
 La conversión latitud/longitud → píxel está en `src/config/ConfigLoader.cpp`, función `latLonToPixel`; `src/map/RoadNetwork.cpp` construye el grafo y calcula rutas mínimas por Dijkstra respetando `oneWay`. Los repartidores no planifican trayectos fuera de este grafo. Los restaurantes y nodos se dibujan en `src/visualization/MapViewer.cpp`.
 
-**Atribución requerida por la licencia ODbL:** © OpenStreetMap contributors. El valor está en `config/equipetrol.json` y DP.12.1 añadió su representación en el panel de la ventana desde `src/visualization/SimulationDashboard.cpp::drawFrame`; **falta confirmar su legibilidad mediante una captura visual**. La pantalla del simulador, y no solo el archivo JSON, debe mostrar la atribución.
+**Atribución requerida por ODbL:** © OpenStreetMap contributors. El valor aparece en `config/equipetrol.json` y está visible en el panel OpenCV (`src/visualization/SimulationDashboard.cpp::drawFrame`), según la [captura de validación visual](evidencias/dp12/validacion_visual_20261013.png). La captura acredita legibilidad de la atribución y los marcadores, pero no demuestra por sí sola el origen técnico ni la correspondencia geográfica exacta de la imagen base; esa procedencia debe conservarse documentada.
 
 La sección 5 define como interfaz pública la ruta al JSON y la bandera opcional `--log`. La validación de campos y referencias se encuentra en `src/config/ConfigLoader.cpp::loadAndValidateConfig`; los archivos inválidos deben generar un error legible en `stderr` y salir con código distinto de cero, sin comenzar la simulación. Los revisores pueden suministrar configuraciones propias; las muestras incluidas en este repositorio no reemplazan esa validación.
 
@@ -197,16 +197,16 @@ Los experimentos de flota y demanda se pueden consultar en [`evidencias/dp8_6/`]
 
 ## 7. Análisis dinámico de memoria y carreras (DP.11)
 
-**Informe detallado:** [`evidencias/dp11/informe_final.md`](evidencias/dp11/informe_final.md). Se realizaron **12 ejecuciones instrumentadas**: seis con ThreadSanitizer y seis con AddressSanitizer + LeakSanitizer + UndefinedBehaviorSanitizer. Todas incluyeron pedidos en ráfaga, averías y apagado por SIGINT o SIGTERM. Las copias de configuración usaron `bagCapacity=1`, `meanIntervalMs=5000`, `burstMax=12`, `maxPending=20` y `breakdownProbability=1.0`.
+**Campaña histórica (anterior a DP.12.8):** [`evidencias/dp11/informe_final.md`](evidencias/dp11/informe_final.md). Se realizaron **12 ejecuciones instrumentadas**: seis con ThreadSanitizer y seis con AddressSanitizer + LeakSanitizer + UndefinedBehaviorSanitizer. Todas incluyeron pedidos en ráfaga, averías y apagado por SIGINT o SIGTERM. Las copias de configuración usaron `bagCapacity=1`, `meanIntervalMs=5000`, `burstMax=12`, `maxPending=20` y `breakdownProbability=1.0`.
 
 | Herramientas | Repeticiones | Reportes en los escenarios ensayados | Evidencias |
 |---|---:|---|---|
 | TSAN (carreras de datos) | 6/6 satisfactorias | Sin hallazgos | `evidencias/dp11/tsan_inicial/`, `tsan_repeticion/` |
 | ASAN + LSAN + UBSAN (memoria y comportamiento indefinido) | 6/6 satisfactorias | Sin hallazgos | `evidencias/dp11/asan_inicial/`, `asan_repeticion/` |
 
-Las 12 ejecuciones acumularon **5.430 pedidos creados y 96 averías**; todas salieron con código 0, respetaron `simulationStopping` único y terminaron en **0.518 s o menos** desde la señal. No fueron necesarias correcciones de memoria/concurrencia en DP.11 porque no se encontraron reportes; se repitieron las pruebas y volvieron a pasar. **No encontrar defectos no demuestra ausencia de todos los defectos posibles.**
+En la **campaña histórica**, esas 12 ejecuciones acumularon **5.430 pedidos creados y 96 averías**; todas salieron con código 0, respetaron `simulationStopping` único y terminaron en **0.518 s o menos** desde la señal. No fueron necesarias correcciones de memoria/concurrencia en DP.11 porque no se encontraron reportes; se repitieron las pruebas y volvieron a pasar. **No encontrar defectos no demuestra ausencia de todos los defectos posibles.**
 
-**Comandos usados**, además de las versiones y variables de entorno consignadas en los registros originales:
+**Comandos usados en la campaña histórica**, además de las versiones y variables de entorno consignadas en los registros originales (para la versión final, usar `delivery_sim_bench`, como se describe en la sección 8.2):
 
 ```bash
 cmake -S . -B ~/build-equipego-tsan -DENABLE_TSAN=ON
@@ -258,18 +258,49 @@ Los informes existentes conservan sus comandos originales y SHA de ejecutables. 
 
 En OpenCV, las motos muestran color interior según estado (gris libre, naranja hacia restaurante, verde entrega, rojo avería); rombos rojos marcan destinos de los pedidos activos. Se conserva la atribución OSM.
 
+## 8.2 Auditoría técnica definitiva (DP.12.9)
+
+**Referencia inmutable del código verificado:** commit `0b51082` de `avance-12`. El commit posterior `6dd487b` incorporó exclusivamente los archivos de evidencia de esa auditoría. Las pruebas anteriores en `evidencias/dp11/` siguen siendo válidas como antecedentes, pero los resultados de la versión de entrega se encuentran en [`evidencias/dp12/auditoria_0b51082/`](evidencias/dp12/auditoria_0b51082/).
+
+| Validación de la versión final | Resultado | Evidencia |
+|---|---:|---|
+| Clon limpio + compilación oficial Release | OK; `delivery_sim_bench` ausente en el build oficial | `evidencias/dp12/auditoria_0b51082/ctest/release.txt` (CTest) y registro de compilación de la auditoría |
+| CTest Release | 10/10 | `evidencias/dp12/auditoria_0b51082/ctest/release.txt` |
+| CTest ThreadSanitizer | 10/10 | `evidencias/dp12/auditoria_0b51082/ctest/tsan.txt` |
+| CTest AddressSanitizer + UndefinedBehaviorSanitizer | 10/10 | `evidencias/dp12/auditoria_0b51082/ctest/asan.txt` |
+| Seis ejecuciones TSAN (SIGINT/SIGTERM) | 6/6 | `evidencias/dp12/auditoria_0b51082/tsan/` |
+| Seis ejecuciones ASAN/UBSAN (SIGINT/SIGTERM) | 6/6 | `evidencias/dp12/auditoria_0b51082/asan/` |
+| Pruebas adversarias (invalidaciones, carga, señales) | 22/22 | `evidencias/dp12/adversarial/` |
+| Validación visual, ocho motos y destinos | Captura inspeccionada | [`evidencias/dp12/validacion_visual_20261013.png`](evidencias/dp12/validacion_visual_20261013.png) |
+
+En las **12 ejecuciones instrumentadas definitivas** se registraron **5.878 pedidos creados**, **96 averías**, ráfagas máximas de 12 pedidos y un tiempo de cierre máximo observado de **0,265 segundos**. Las 12 salieron con estado 0; la herramienta de auditoría no identificó hallazgos de TSAN, ASAN/LSAN ni UBSAN en esas corridas. Los directorios `tsan/` y `asan/` conservan versiones, configuración, `metadata.json`, eventos, `stdout.txt`, `stderr.txt` y el informe. *La ausencia de reportes en las corridas no prueba la ausencia de todos los posibles defectos.*
+
+Para repetir el análisis dinámico final tras compilar con instrumentos, activar expresamente `-DEQUIPEGO_BUILD_BENCHMARK=ON` y utilizar el binario auxiliar:
+
+```bash
+python3 benchmarks/dp11_dynamic_analysis.py \
+  --sanitizer tsan --binary /ruta/build-tsan/delivery_sim_bench --repeats 3
+python3 benchmarks/dp11_dynamic_analysis.py \
+  --sanitizer asan --binary /ruta/build-asan/delivery_sim_bench --repeats 3
+```
+
+El ejecutable público de entrega (`delivery_sim`) permanece separado: no admite `--headless`, `--gui`, `--scale` ni `--duration`. Su apertura gráfica y el contrato de eventos se comprobaron con `tests/test_dp12_8_contract.py --run`; la captura incluida muestra el mapa, ocho motos, estados, destinos activos y la atribución visible de OpenStreetMap.
+
 ## 9. Lista de verificación antes de entregar (obligatoria)
 
-- [ ] Confirmar la imagen original de OSM y la legibilidad del Segundo, Tercer y Cuarto Anillo y avenida San Martín, así como atribución **visible** en la ventana.
-- [x] DP.12.1: respetar `timeScale` del JSON y abrir GUI en ejecución normal; DP.12.2: sincronizar el reloj con el deadline (pruebas normales y TSAN 9/9, y prueba temporal aprobadas).
-- [x] DP.12.8: separar `delivery_sim` (solo interfaz oficial) y `delivery_sim_bench` (diagnóstico). [ ] Validar atribución visual con captura.
-- [x] DP.12.5: 22/22 pruebas adversarias (12 inválidos, 7 válidos, 3 señales), evidencias en `evidencias/dp12/adversarial/`.
-- [x] DP.12.4: movimiento basado en snapshots reales y test de segmento/avería. [ ] Inspección humana de la ventana con 64 motos.
-- [x] DP.12.3: CPU ociosa estable medida con 8 y 64 motos, separando el costo de OpenCV (`evidencias/dp12/cpu_ociosa/`).
-- [ ] Confirmar con el docente si la fila «política de lanzamiento declarada» admite el pool explícito de `QuoteExecutor` o exige `std::launch::async` en trabajo real.
-- [x] DP.12.6-7: clon limpio `6ad35d1`, CTest 10/10 + TSAN 10/10 y 12/12 instrumentadas (6 TSAN, 6 ASAN/UBSAN). [ ] Revalidar si cambia el código oficial.
+- [x] Clon limpio del commit `0b51082`: compilación Release y CTest 10/10; compilación ThreadSanitizer y CTest 10/10; compilación ASAN/UBSAN y CTest 10/10.
+- [x] 12/12 ejecuciones instrumentadas sobre `0b51082`, con registros crudos sin editar (`evidencias/dp12/auditoria_0b51082/`).
+- [x] 22/22 pruebas adversarias (12 configuraciones inválidas, siete casos de carga, tres apagados por señales), bajo la versión previa con la misma lógica de simulación (`evidencias/dp12/adversarial/`).
+- [x] Interfaz oficial que abre siempre OpenCV, y ejecutable `delivery_sim_bench` habilitado solo cuando se solicita explícitamente; pruebas de contrato correctas.
+- [x] Inspección visual de ocho motos, estados por color, destinos activos y atribución de OpenStreetMap; [captura adjunta](evidencias/dp12/validacion_visual_20261013.png). Una captura estática no certifica por sí sola la fluidez de toda la animación.
+- [x] Progreso real de las motos en segmentos del grafo y congelación ante averías validados con `test_dp12_motion` y CTest.
+- [x] CPU ociosa estable medida para 8 y 64 motos; diferencia entre costo del visor y costo de hilos de repartidores documentada en `evidencias/dp12/cpu_ociosa/`.
+- [ ] Verificación visual humana del **escenario de 64 motos** bajo ejecución prolongada: el escenario adversario superó la prueba automatizada, pero la captura aportada representa ocho motos.
+- [ ] Conservar referencia verificable del **origen exacto y exportación** de `data/equipetrol.png` y comprobar sobre el mapa real la cobertura de los anillos y avenida San Martín. La captura visible no documenta toda esa procedencia.
+- [ ] Confirmar con el docente, si fuese necesario, si la política de planificación explícita de tareas del pool `QuoteExecutor` satisface la fila sobre futuros y lanzamiento. La rúbrica menciona una política de lanzamiento declarada, no exige literalmente `std::launch::async`.
 
-**No marcar DP.0–DP.12 como cumplimiento completo solo por las pruebas ya realizadas:** en la rúbrica hay verificaciones de GUI, mapa y entradas adversarias que deben comprobarse en la versión exacta de entrega.
+**Estado:** las evidencias de compilación, contrato, estrés, pruebas dinámicas y GUI principal están registradas. Los tres puntos sin marcar son revisiones externas o visuales; no se declaran aprobados automáticamente.
+
 
 ---
 
