@@ -1,0 +1,17 @@
+{
+  "binary": "/home/leandro/build-equipego/delivery_sim",
+  "binary_sha256": "6509caea3ceae2dc2583a087f7f498b2a06b82fc4c06111bae88872181b25ca6",
+  "original_config": "/mnt/c/Users/leand/OneDrive/Desktop/6to Semestre/Computaci\u00f3n concurrente paralela y distribuida/Bloque 1/EquipeGo/config/equipetrol.json",
+  "config_sha256": "67b6b1c0ee14c02fd17155d03ed78f18d6596820f4f54a60b917eb781c044ef6",
+  "system": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+  "warmup": 5.0,
+  "measure": 20.0,
+  "cooldown": 3.0,
+  "fleets": [
+    8
+  ],
+  "modes": [
+    "headless",
+    "gui"
+  ]
+}

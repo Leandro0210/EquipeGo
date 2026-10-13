@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/home/leandro/build-equipego/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp12_idle_steady/20261013T053451Z/motos_008/gui/config.json",
+    "--gui",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp12_idle_steady/20261013T053451Z/motos_008/gui/events.jsonl"
+  ],
+  "warmup_s": 5.0,
+  "measure_s": 20.0,
+  "cooldown_s": 3.0,
+  "mode": "gui",
+  "couriers": 8,
+  "binary_sha256": "6509caea3ceae2dc2583a087f7f498b2a06b82fc4c06111bae88872181b25ca6",
+  "config_path": "/home/leandro/equipego_benchmarks/dp12_idle_steady/20261013T053451Z/motos_008/gui/config.json",
+  "measured_cpu_s": 4.13,
+  "measured_wall_s": 20.000176,
+  "measured_cpu_pct_one_core": 20.65,
+  "startup_excluded": true,
+  "exit_code": 0,
+  "verified_idle": true
+}

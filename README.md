@@ -4,7 +4,7 @@
 
 EquipeGo simula una flota de repartidores independientes, un generador de pedidos por ráfagas, un despachador con cálculo concurrente de ETA, recursos de recogida limitados, averías y rescate de pedidos. La interfaz se dibuja con OpenCV sobre una imagen del mapa de Equipetrol. La corrección se contrasta con un registro JSONL y un resumen final.
 
-> **Alcance de este README:** describe la implementación inspeccionada después de DP.11. La rúbrica exige que la ejecución de evaluación siempre abra una ventana y respete `simulation.timeScale` del JSON. La implementación actual tiene opciones auxiliares de pruebas `--headless`, `--gui`, `--scale` y `--duration`, y ajusta automáticamente el valor gráfico de `timeScale` a 3 cuando no se pasa `--scale`. Estas discrepancias **deben corregirse antes de declarar cumplimiento estricto**. Las opciones auxiliares no forman parte de la interfaz obligatoria de la sección 5.
+> **Estado tras DP.12.2 (rama `avance-12`):** el arranque normal abre OpenCV y conserva `simulation.timeScale` del JSON; el reloj y el límite de duración parten de un mismo instante. Siguen existiendo las opciones auxiliares `--headless`, `--gui`, `--scale` y `--duration` usadas en los experimentos; la rúbrica solo describe `--log` y afirma que no existe modo sin ventana. Por tanto, la interfaz de entrega **todavía necesita revisión** antes de declarar cumplimiento estricto. Las ejecuciones anteriores de DP.10 y DP.11 corresponden a versiones previas de la aplicación.
 
 ## 1. Requisitos, dependencias y compilación (DP.0)
 
@@ -53,7 +53,7 @@ Límites registrados (grados decimales):
 
 La conversión latitud/longitud → píxel está en `src/config/ConfigLoader.cpp`, función `latLonToPixel`; `src/map/RoadNetwork.cpp` construye el grafo y calcula rutas mínimas por Dijkstra respetando `oneWay`. Los repartidores no planifican trayectos fuera de este grafo. Los restaurantes y nodos se dibujan en `src/visualization/MapViewer.cpp`.
 
-**Atribución requerida por la licencia ODbL:** © OpenStreetMap contributors. La atribución se encuentra en `config/equipetrol.json` y debe ser **visible además en la ventana**. La revisión del código actual no confirmó que `MapViewer::renderNetwork` la dibuje explícitamente; verificar/corregir antes de entregar.
+**Atribución requerida por la licencia ODbL:** © OpenStreetMap contributors. El valor está en `config/equipetrol.json` y DP.12.1 añadió su representación en el panel de la ventana desde `src/visualization/SimulationDashboard.cpp::drawFrame`; **falta confirmar su legibilidad mediante una captura visual**. La pantalla del simulador, y no solo el archivo JSON, debe mostrar la atribución.
 
 La sección 5 define como interfaz pública la ruta al JSON y la bandera opcional `--log`. La validación de campos y referencias se encuentra en `src/config/ConfigLoader.cpp::loadAndValidateConfig`; los archivos inválidos deben generar un error legible en `stderr` y salir con código distinto de cero, sin comenzar la simulación. Los revisores pueden suministrar configuraciones propias; las muestras incluidas en este repositorio no reemplazan esa validación.
 
@@ -240,7 +240,8 @@ Cada carpeta contiene versiones, configuración de cada prueba, `stdout.txt`, `s
 ## 9. Lista de verificación antes de entregar (obligatoria)
 
 - [ ] Confirmar la imagen original de OSM y la legibilidad del Segundo, Tercer y Cuarto Anillo y avenida San Martín, así como atribución **visible** en la ventana.
-- [ ] Corregir `main.cpp` para **respetar el `timeScale` del JSON** y definir una interfaz de evaluación que siempre abra ventana, sin depender de un modo headless.
+- [x] DP.12.1: respetar `timeScale` del JSON y abrir GUI en ejecución normal; DP.12.2: sincronizar el reloj con el deadline (pruebas normales y TSAN 9/9, y prueba temporal aprobadas).
+- [ ] Resolver el modo opcional `--headless`, prohibido en sentido literal por la rúbrica, sin perder la reproducibilidad de los experimentos; validar atribución visual.
 - [ ] Verificar con configuraciones externas y varias ejecuciones: 64 motos, cientos de nodos, `pickupSlots=1`, `bagCapacity=1`, ráfagas grandes, `breakdownProbability=1`, rutas inaccesibles e invalidaciones del JSON.
 - [ ] Validar que la GUI represente el trayecto realmente recorrido, no solo una predicción independiente; comprobar fluidez y el mapa para 64 motos.
 - [ ] Medir CPU con casi cero pedidos y repartidores inactivos; separar costo GUI del costo concurrente.
