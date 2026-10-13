@@ -1,0 +1,80 @@
+{
+  "command": [
+    "/home/leandro/build-equipego-asan/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp11/asan_20261013T035104Z/sigterm_rep_02/config.json",
+    "--headless",
+    "--duration",
+    "0",
+    "--scale",
+    "60",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp11/asan_20261013T035104Z/sigterm_rep_02/events.jsonl"
+  ],
+  "exact_command_shell": "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=66 LSAN_OPTIONS=exitcode=66:report_objects=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /home/leandro/build-equipego-asan/delivery_sim /home/leandro/equipego_benchmarks/dp11/asan_20261013T035104Z/sigterm_rep_02/config.json --headless --duration 0 --scale 60 --log /home/leandro/equipego_benchmarks/dp11/asan_20261013T035104Z/sigterm_rep_02/events.jsonl",
+  "source_config": "/mnt/c/Users/leand/OneDrive/Desktop/6to Semestre/Computación concurrente paralela y distribuida/Bloque 1/EquipeGo/config/equipetrol.json",
+  "source_config_sha256": "67b6b1c0ee14c02fd17155d03ed78f18d6596820f4f54a60b917eb781c044ef6",
+  "config_overrides": {
+    "fleet.bagCapacity": 1,
+    "orders.meanIntervalMs": 5000,
+    "orders.burstMax": 12,
+    "orders.maxPending": 20,
+    "incidents.breakdownProbability": 1.0
+  },
+  "sanitizer": "asan",
+  "signal": "SIGTERM",
+  "signal_number": 15,
+  "scale": 60,
+  "minimum_seconds_before_signal": 6,
+  "minimum_events_before_signal": {
+    "orderCreated": 30,
+    "orderAssigned": 1,
+    "courierBreakdown": 1
+  },
+  "maximum_wait_for_events_s": 120.0,
+  "exit_code": 0,
+  "seconds_to_shutdown": 0.3154,
+  "observed_before_signal": {
+    "orderCreated": 498,
+    "orderAssigned": 8,
+    "orderRejected": 470,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1
+  },
+  "max_burst_before_signal": 12,
+  "error": null,
+  "summary": {
+    "avgDeliveryMs": 0.0,
+    "breakdowns": 8,
+    "created": 498,
+    "delivered": 0,
+    "deliveredPerCourier": {
+      "c0": 0,
+      "c1": 0,
+      "c2": 0,
+      "c3": 0,
+      "c4": 0,
+      "c5": 0,
+      "c6": 0,
+      "c7": 0
+    },
+    "maxDeliveryMs": 0,
+    "pending": 28,
+    "reassigned": 0,
+    "rejected": 470
+  },
+  "event_counts": {
+    "orderCreated": 498,
+    "orderAssigned": 8,
+    "orderRejected": 470,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1,
+    "simulationStopping": 1
+  },
+  "max_created_same_timestamp": 12,
+  "stderr_bytes": 0,
+  "sanitizer_errors": [],
+  "status": "PASS",
+  "elapsed_before_signal_s": 6.0087
+}

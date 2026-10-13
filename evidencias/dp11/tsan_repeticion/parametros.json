@@ -1,0 +1,19 @@
+{
+  "tool": "tsan",
+  "source_config": "/mnt/c/Users/leand/OneDrive/Desktop/6to Semestre/Computaci\u00f3n concurrente paralela y distribuida/Bloque 1/EquipeGo/config/equipetrol.json",
+  "source_config_sha256": "67b6b1c0ee14c02fd17155d03ed78f18d6596820f4f54a60b917eb781c044ef6",
+  "changes": {
+    "fleet.bagCapacity": 1,
+    "orders.meanIntervalMs": 5000,
+    "orders.burstMax": 12,
+    "orders.maxPending": 20,
+    "incidents.breakdownProbability": 1.0
+  },
+  "case": "all",
+  "repeats": 2,
+  "scale": 60,
+  "min_runtime": 6,
+  "max_wait": 120.0,
+  "binary": "/home/leandro/build-equipego-tsan/delivery_sim",
+  "binary_sha256": "b1f678cdaae7086d9b1e0e1c45cd77882775e21b30c27e51feb4223802d4ef1e"
+}
