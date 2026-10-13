@@ -1,0 +1,80 @@
+{
+  "command": [
+    "/tmp/equipego-final-ixOAuy/build-tsan/delivery_sim_bench",
+    "/home/leandro/equipego_benchmarks/dp11/tsan_20261013T171846Z/sigterm_rep_01/config.json",
+    "--headless",
+    "--duration",
+    "0",
+    "--scale",
+    "60",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp11/tsan_20261013T171846Z/sigterm_rep_01/events.jsonl"
+  ],
+  "exact_command_shell": "TSAN_OPTIONS=halt_on_error=1:exitcode=66:history_size=7 /tmp/equipego-final-ixOAuy/build-tsan/delivery_sim_bench /home/leandro/equipego_benchmarks/dp11/tsan_20261013T171846Z/sigterm_rep_01/config.json --headless --duration 0 --scale 60 --log /home/leandro/equipego_benchmarks/dp11/tsan_20261013T171846Z/sigterm_rep_01/events.jsonl",
+  "source_config": "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json",
+  "source_config_sha256": "f8c3c9a584400347af5bddad9978ac1efc92ea895ee31b47ac2067bad2dfaa69",
+  "config_overrides": {
+    "fleet.bagCapacity": 1,
+    "orders.meanIntervalMs": 5000,
+    "orders.burstMax": 12,
+    "orders.maxPending": 20,
+    "incidents.breakdownProbability": 1.0
+  },
+  "sanitizer": "tsan",
+  "signal": "SIGTERM",
+  "signal_number": 15,
+  "scale": 60,
+  "minimum_seconds_before_signal": 6,
+  "minimum_events_before_signal": {
+    "orderCreated": 30,
+    "orderAssigned": 1,
+    "courierBreakdown": 1
+  },
+  "maximum_wait_for_events_s": 120,
+  "exit_code": 0,
+  "seconds_to_shutdown": 0.1143,
+  "observed_before_signal": {
+    "orderCreated": 517,
+    "orderAssigned": 8,
+    "orderRejected": 489,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1
+  },
+  "max_burst_before_signal": 12,
+  "error": null,
+  "summary": {
+    "avgDeliveryMs": 0.0,
+    "breakdowns": 8,
+    "created": 517,
+    "delivered": 0,
+    "deliveredPerCourier": {
+      "c0": 0,
+      "c1": 0,
+      "c2": 0,
+      "c3": 0,
+      "c4": 0,
+      "c5": 0,
+      "c6": 0,
+      "c7": 0
+    },
+    "maxDeliveryMs": 0,
+    "pending": 28,
+    "reassigned": 0,
+    "rejected": 489
+  },
+  "event_counts": {
+    "orderCreated": 517,
+    "orderAssigned": 8,
+    "orderRejected": 489,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1,
+    "simulationStopping": 1
+  },
+  "max_created_same_timestamp": 12,
+  "stderr_bytes": 0,
+  "sanitizer_errors": [],
+  "status": "PASS",
+  "elapsed_before_signal_s": 6.0128
+}

@@ -1,0 +1,19 @@
+{
+  "tool": "tsan",
+  "source_config": "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json",
+  "source_config_sha256": "f8c3c9a584400347af5bddad9978ac1efc92ea895ee31b47ac2067bad2dfaa69",
+  "changes": {
+    "fleet.bagCapacity": 1,
+    "orders.meanIntervalMs": 5000,
+    "orders.burstMax": 12,
+    "orders.maxPending": 20,
+    "incidents.breakdownProbability": 1.0
+  },
+  "case": "all",
+  "repeats": 3,
+  "scale": 60,
+  "min_runtime": 6,
+  "max_wait": 120,
+  "binary": "/tmp/equipego-final-ixOAuy/build-tsan/delivery_sim_bench",
+  "binary_sha256": "2ebd0d4191dbe92d413d854793cf8722b359bcf6ab907a84dff8ee16637ca6f4"
+}

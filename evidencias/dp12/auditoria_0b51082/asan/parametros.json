@@ -1,0 +1,19 @@
+{
+  "tool": "asan",
+  "source_config": "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json",
+  "source_config_sha256": "f8c3c9a584400347af5bddad9978ac1efc92ea895ee31b47ac2067bad2dfaa69",
+  "changes": {
+    "fleet.bagCapacity": 1,
+    "orders.meanIntervalMs": 5000,
+    "orders.burstMax": 12,
+    "orders.maxPending": 20,
+    "incidents.breakdownProbability": 1.0
+  },
+  "case": "all",
+  "repeats": 3,
+  "scale": 60,
+  "min_runtime": 6,
+  "max_wait": 120,
+  "binary": "/tmp/equipego-final-ixOAuy/build-asan/delivery_sim_bench",
+  "binary_sha256": "b35d74ed31f4a30a5b6fc1671b6a279e29edb37e7fa295d80c1adf6fb4b57fcc"
+}

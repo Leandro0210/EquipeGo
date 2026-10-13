@@ -1,0 +1,209 @@
+Start testing: Oct 13 13:05 -04
+----------------------------------------------------------
+1/10 Testing: test_event_logger
+1/10 Test: test_event_logger
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_event_logger"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_event_logger" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP7 EVENT LOGGER ===
+Linea de inicio exacta: OK
+JSONL concurrente sin mezclas: OK
+Campos obligatorios: OK
+Tiempo monotono por pedido: OK
+Eventos invalidos rechazados: OK
+Eventos escritos: 1203/1203
+DP7 EVENT LOGGER TEST: OK
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"test_event_logger" end time: Oct 13 13:05 -04
+"test_event_logger" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/10 Testing: test_assignment_callback
+2/10 Test: test_assignment_callback
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_assignment_callback" "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_assignment_callback" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP7 ASSIGNMENT CALLBACK ===
+Rollback ante error: OK
+Asignacion confirmada: OK
+Rechazo sin callback: OK
+Evento JSONL unico: OK
+DP7 ASSIGNMENT CALLBACK TEST: OK
+<end of output>
+Test time =   0.38 sec
+----------------------------------------------------------
+Test Passed.
+"test_assignment_callback" end time: Oct 13 13:05 -04
+"test_assignment_callback" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/10 Testing: test_courier_lifecycle_events
+3/10 Test: test_courier_lifecycle_events
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_courier_lifecycle_events" "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_courier_lifecycle_events" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP7 COURIER LIFECYCLE ===
+Pedido asignado: OK
+Pedido entregado: OK
+JSONL valido: OK
+Cinco eventos en orden: OK
+Campos obligatorios: OK
+Tiempo no decreciente: OK
+DP7 COURIER LIFECYCLE TEST: OK
+<end of output>
+Test time =   1.13 sec
+----------------------------------------------------------
+Test Passed.
+"test_courier_lifecycle_events" end time: Oct 13 13:05 -04
+"test_courier_lifecycle_events" time elapsed: 00:00:01
+----------------------------------------------------------
+
+4/10 Testing: test_incident_events
+4/10 Test: test_incident_events
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_incident_events" "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_incident_events" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP7 INCIDENT EVENTS ===
+Averia y rescate registrado: OK
+Reasignacion antes de entrega: OK
+Averias simultaneas sin rescate falso: OK
+DP7 INCIDENT EVENTS TEST: OK
+<end of output>
+Test time =   2.68 sec
+----------------------------------------------------------
+Test Passed.
+"test_incident_events" end time: Oct 13 13:05 -04
+"test_incident_events" time elapsed: 00:00:02
+----------------------------------------------------------
+
+5/10 Testing: test_logger_write_failure
+5/10 Test: test_logger_write_failure
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_logger_write_failure"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_logger_write_failure" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP7 LOGGER WRITE FAILURE ===
+Hilos terminados: OK
+Sin excepciones de I/O en workers: OK
+Fallo detectado en flush: OK
+DP7 LOGGER WRITE FAILURE TEST: OK
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"test_logger_write_failure" end time: Oct 13 13:05 -04
+"test_logger_write_failure" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/10 Testing: test_map_viewer
+6/10 Test: test_map_viewer
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_map_viewer" "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_map_viewer" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP8.2 MAP NETWORK ===
+Mapa cargado: OK
+Dimensiones correctas: OK
+Pixeles originales intactos: OK
+Copia independiente: OK
+Red dibujada: OK
+Overlay independiente: OK
+Render reproducible: OK
+Topologia valida: OK
+DP8.2 MAP NETWORK TEST: OK
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"test_map_viewer" end time: Oct 13 13:05 -04
+"test_map_viewer" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/10 Testing: test_live_fleet_preview
+7/10 Test: test_live_fleet_preview
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/live_fleet_preview" "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json" "--check"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_live_fleet_preview" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+=== TEST DP8.3 MOVIMIENTO SUAVE ===
+Motos: 8
+Escala: 3x
+Interpolacion: OK
+Render y posiciones: OK
+DP8.3 SMOOTH MOTION CHECK: OK
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"test_live_fleet_preview" end time: Oct 13 13:05 -04
+"test_live_fleet_preview" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/10 Testing: test_real_orders_preview
+8/10 Test: test_real_orders_preview
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/real_orders_preview" "/tmp/equipego-final-ixOAuy/EquipeGo/config/equipetrol.json" "--check"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_real_orders_preview" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+Simulation has started...
+Pedidos creados: 24
+Asignados: 24
+Entregados: 0
+Eventos JSONL: /tmp/equipego_visual_10386497801594.jsonl
+DP8.4 REAL ORDERS CHECK: OK
+<end of output>
+Test time =   1.53 sec
+----------------------------------------------------------
+Test Passed.
+"test_real_orders_preview" end time: Oct 13 13:05 -04
+"test_real_orders_preview" time elapsed: 00:00:01
+----------------------------------------------------------
+
+9/10 Testing: test_live_event_stats
+9/10 Test: test_live_event_stats
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_live_event_stats"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_live_event_stats" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+DP8.5 LIVE EVENT STATS TEST: OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_live_event_stats" end time: Oct 13 13:05 -04
+"test_live_event_stats" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/10 Testing: test_dp12_motion
+10/10 Test: test_dp12_motion
+Command: "/tmp/equipego-final-ixOAuy/build-oficial/test_dp12_motion"
+Directory: /tmp/equipego-final-ixOAuy/build-oficial
+"test_dp12_motion" start time: Oct 13 13:05 -04
+Output:
+----------------------------------------------------------
+DP12.4 PASS: segmento real, progreso monotono, averia inmovil
+<end of output>
+Test time =   1.32 sec
+----------------------------------------------------------
+Test Passed.
+"test_dp12_motion" end time: Oct 13 13:05 -04
+"test_dp12_motion" time elapsed: 00:00:01
+----------------------------------------------------------
+
+End testing: Oct 13 13:05 -04
