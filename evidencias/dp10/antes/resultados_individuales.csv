@@ -1,0 +1,10 @@
+label,couriers,repeat,duration_sim_s,scale,wall_s,cpu_s,cpu_user_s,cpu_system_s,cpu_pct_one_core,created,assigned,delivered,rejected,pending,queue_full,no_courier,unreachable,breakdowns,reassigned,assignment_p50_sim_ms,assignment_p95_sim_ms,assignment_mean_sim_ms,delivered_per_sim_hour,trial_directory
+antes,8,1,900,60.0,16.0381,1.2325,0.7758,0.4566,7.68,337,41,17,269,51,233,36,0,0,0,964.0,573888.0,152559.902,68.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_008/repeticion_01
+antes,8,2,900,60.0,15.6254,0.7784,0.4583,0.32,4.98,337,41,17,269,51,233,36,0,0,0,1091.0,573145.0,152541.585,68.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_008/repeticion_02
+antes,8,3,900,60.0,15.3131,0.4769,0.3823,0.0946,3.11,337,41,17,269,51,233,36,0,0,0,1133.0,573268.0,152638.293,68.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_008/repeticion_03
+antes,32,1,900,60.0,15.4446,1.0924,0.8296,0.2628,7.07,337,154,58,139,140,139,0,0,0,0,2599.0,520237.5,117105.312,232.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_032/repeticion_01
+antes,32,2,900,60.0,15.3969,1.0844,0.7784,0.306,7.04,337,154,58,139,140,139,0,0,0,0,2195.5,519675.15,116805.312,232.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_032/repeticion_02
+antes,32,3,900,60.0,15.301,1.0034,0.7947,0.2087,6.56,337,154,58,139,140,139,0,0,0,0,2623.0,519818.55,117052.461,232.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_032/repeticion_03
+antes,64,1,900,60.0,15.3765,2.0542,1.7372,0.317,13.36,337,279,90,19,228,19,0,0,2,1,2537.0,197703.2,30948.527,360.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_064/repeticion_01
+antes,64,2,900,60.0,15.2388,1.9772,1.6063,0.371,12.98,337,284,95,12,230,12,0,0,2,1,2548.0,203459.8,32159.349,380.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_064/repeticion_02
+antes,64,3,900,60.0,15.3359,1.9508,1.6159,0.3349,12.72,337,284,95,13,229,13,0,0,2,1,2101.0,205202.4,32167.035,380.0,/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_064/repeticion_03

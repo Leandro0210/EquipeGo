@@ -1,0 +1,54 @@
+{
+  "row": {
+    "label": "antes",
+    "couriers": 8,
+    "repeat": 1,
+    "duration_sim_s": 900,
+    "scale": 60.0,
+    "wall_s": 16.0381,
+    "cpu_s": 1.2325,
+    "cpu_user_s": 0.7758,
+    "cpu_system_s": 0.4566,
+    "cpu_pct_one_core": 7.68,
+    "created": 337,
+    "assigned": 41,
+    "delivered": 17,
+    "rejected": 269,
+    "pending": 51,
+    "queue_full": 233,
+    "no_courier": 36,
+    "unreachable": 0,
+    "breakdowns": 0,
+    "reassigned": 0,
+    "assignment_p50_sim_ms": 964.0,
+    "assignment_p95_sim_ms": 573888.0,
+    "assignment_mean_sim_ms": 152559.902,
+    "delivered_per_sim_hour": 68.0,
+    "trial_directory": "/home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_008/repeticion_01"
+  },
+  "summary": {
+    "avgDeliveryMs": 483310.5294117647,
+    "breakdowns": 0,
+    "created": 337,
+    "delivered": 17,
+    "deliveredPerCourier": {
+      "c0": 2,
+      "c1": 3,
+      "c2": 2,
+      "c3": 3,
+      "c4": 1,
+      "c5": 1,
+      "c6": 3,
+      "c7": 2
+    },
+    "maxDeliveryMs": 863374,
+    "pending": 51,
+    "reassigned": 0,
+    "rejected": 269
+  },
+  "reasons": {
+    "queueFull": 233,
+    "unreachable": 0,
+    "noCourier": 36
+  }
+}

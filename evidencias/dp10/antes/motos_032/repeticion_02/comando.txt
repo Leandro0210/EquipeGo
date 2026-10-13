@@ -1,0 +1,1 @@
+/home/leandro/build-equipego/delivery_sim /home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_032/repeticion_02/config.json --headless --scale 60.0 --duration 900 --log /home/leandro/equipego_benchmarks/dp10/antes_20261012_201341/motos_032/repeticion_02/events.log

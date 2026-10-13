@@ -1,0 +1,18 @@
+{
+  "label": "antes",
+  "fleets": [
+    8,
+    32,
+    64
+  ],
+  "duration": 900,
+  "scale": 60.0,
+  "repeats": 3,
+  "config_signature": "cbec3864d7ddf7081d936914c90745f7eb3131f5c5df614c399ebf5852aeb554",
+  "source_config": "/mnt/c/Users/leand/OneDrive/Desktop/6to Semestre/Computación concurrente paralela y distribuida/Bloque 1/EquipeGo/config/equipetrol.json",
+  "original_map": "/mnt/c/Users/leand/OneDrive/Desktop/6to Semestre/Computación concurrente paralela y distribuida/Bloque 1/EquipeGo/data/equipetrol.png",
+  "binary": "/home/leandro/build-equipego/delivery_sim",
+  "binary_sha256": "f611d6fcda8bfc519d12f77416ef3df6cd4b0b0651036582b9a9aa2377299d47",
+  "git_head": "3d3a9afbe2da4effa710a4175b3cf12a1edc4e70",
+  "started_at": "20261012_201341"
+}

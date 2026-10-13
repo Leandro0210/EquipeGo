@@ -1,0 +1,4 @@
+couriers,cpu_antes_s,cpu_despues_s,reduccion_cpu_pct,entregados_antes,entregados_despues,p95_antes_sim_ms,p95_despues_sim_ms
+8,0.829,0.786,5.187,17.0,17.0,573433.667,578049.667
+32,1.06,1.138,-7.358,58.0,58.0,519910.4,519804.617
+64,1.994,1.612,19.157,93.333,96.667,202121.8,204061.967

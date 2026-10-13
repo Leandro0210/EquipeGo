@@ -1,0 +1,10 @@
+label,couriers,repeat,duration_sim_s,scale,wall_s,cpu_s,cpu_user_s,cpu_system_s,cpu_pct_one_core,created,assigned,delivered,rejected,pending,queue_full,no_courier,unreachable,breakdowns,reassigned,assignment_p50_sim_ms,assignment_p95_sim_ms,assignment_mean_sim_ms,delivered_per_sim_hour,trial_directory
+despues,8,1,900,60.0,15.5539,0.7403,0.4636,0.2766,4.76,337,41,17,269,51,233,36,0,0,0,717.0,572756.0,152243.951,68.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_008/repeticion_01
+despues,8,2,900,60.0,15.7896,0.8515,0.4619,0.3896,5.39,337,41,17,267,53,231,36,0,0,0,681.0,587838.0,153133.244,68.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_008/repeticion_02
+despues,8,3,900,60.0,15.6238,0.7668,0.5216,0.2452,4.91,337,41,17,269,51,233,36,0,0,0,679.0,573555.0,152357.756,68.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_008/repeticion_03
+despues,32,1,900,60.0,15.6078,1.0707,0.7029,0.3678,6.86,337,154,58,139,140,139,0,0,0,0,1308.0,519709.75,116476.416,232.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_032/repeticion_01
+despues,32,2,900,60.0,16.0268,1.4801,0.8527,0.6274,9.24,337,154,58,139,140,139,0,0,0,0,1191.5,519846.95,116517.357,232.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_032/repeticion_02
+despues,32,3,900,60.0,15.3105,0.862,0.6465,0.2155,5.63,337,154,58,139,140,139,0,0,0,0,1263.5,519857.15,116442.786,232.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_032/repeticion_03
+despues,64,1,900,60.0,15.6621,1.8192,1.1786,0.6406,11.62,337,286,97,11,229,11,0,0,2,1,1565.5,207645.5,32100.902,388.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_064/repeticion_01
+despues,64,2,900,60.0,15.3179,1.5204,1.1677,0.3527,9.93,337,286,97,11,229,11,0,0,2,1,1373.5,202323.0,31313.385,388.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_064/repeticion_02
+despues,64,3,900,60.0,15.3027,1.4964,1.114,0.3823,9.78,337,285,96,11,230,11,0,0,2,1,1429.0,202217.4,30909.888,384.0,/home/leandro/equipego_benchmarks/dp10/despues_20261012_202704/motos_064/repeticion_03
