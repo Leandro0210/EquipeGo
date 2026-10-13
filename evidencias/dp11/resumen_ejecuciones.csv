@@ -1,0 +1,13 @@
+grupo,herramienta,caso,estado,creados,asignados,entregados,rechazados,pendientes,averias,rafaga_max,cierre_s,codigo_salida,stderr_bytes,evidencia
+tsan_inicial,TSAN,sigint_rep_01,PASS,469,8,0,441,28,8,12,0.1141,0,0,tsan_inicial/sigint_rep_01
+tsan_inicial,TSAN,sigterm_rep_01,PASS,478,8,0,450,28,8,12,0.1144,0,0,tsan_inicial/sigterm_rep_01
+tsan_repeticion,TSAN,sigint_rep_01,PASS,287,8,0,259,28,8,12,0.3191,0,0,tsan_repeticion/sigint_rep_01
+tsan_repeticion,TSAN,sigint_rep_02,PASS,498,8,0,470,28,8,12,0.1647,0,0,tsan_repeticion/sigint_rep_02
+tsan_repeticion,TSAN,sigterm_rep_01,PASS,478,8,0,450,28,8,12,0.1141,0,0,tsan_repeticion/sigterm_rep_01
+tsan_repeticion,TSAN,sigterm_rep_02,PASS,478,8,0,450,28,8,12,0.1149,0,0,tsan_repeticion/sigterm_rep_02
+asan_inicial,ASAN/LSAN/UBSAN,sigint_rep_01,PASS,305,8,0,277,28,8,12,0.3658,0,0,asan_inicial/sigint_rep_01
+asan_inicial,ASAN/LSAN/UBSAN,sigterm_rep_01,PASS,517,8,0,489,28,8,12,0.1642,0,0,asan_inicial/sigterm_rep_01
+asan_repeticion,ASAN/LSAN/UBSAN,sigint_rep_01,PASS,443,8,0,415,28,8,12,0.5179,0,0,asan_repeticion/sigint_rep_01
+asan_repeticion,ASAN/LSAN/UBSAN,sigint_rep_02,PASS,478,8,0,450,28,8,12,0.3197,0,0,asan_repeticion/sigint_rep_02
+asan_repeticion,ASAN/LSAN/UBSAN,sigterm_rep_01,PASS,501,8,0,473,28,8,12,0.4163,0,0,asan_repeticion/sigterm_rep_01
+asan_repeticion,ASAN/LSAN/UBSAN,sigterm_rep_02,PASS,498,8,0,470,28,8,12,0.3154,0,0,asan_repeticion/sigterm_rep_02
