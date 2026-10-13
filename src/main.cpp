@@ -199,38 +199,50 @@ EventAudit auditEventLog(const std::string &filename,
 
 namespace {
 
+#ifdef EQUIPEGO_BENCHMARK_CLI
 enum class DisplayMode { Auto, Gui, Headless };
+#endif
 
 struct RunOptions {
+#ifdef EQUIPEGO_BENCHMARK_CLI
   DisplayMode display = DisplayMode::Auto;
   bool hasScale = false;
   double scale = 0.0;
   bool hasDuration = false;
   int duration = 0;
+#endif
   bool hasLogPath = false;
   std::string logPath;
 };
 
 bool readOptions(int argc, char *argv[], RunOptions &options) {
   if (argc < 2) {
-    std::cerr << "Uso: delivery_sim config.json [--gui|--headless] "
+#ifdef EQUIPEGO_BENCHMARK_CLI
+    std::cerr << "Uso: delivery_sim_bench config.json [--gui|--headless] "
                  "[--scale N] [--duration SEGUNDOS] [--log RUTA]\n";
+#else
+    std::cerr << "Uso: delivery_sim config.json [--log RUTA]\n";
+#endif
     return false;
   }
 
   for (int i = 2; i < argc; ++i) {
     const std::string argument = argv[i];
+#ifdef EQUIPEGO_BENCHMARK_CLI
     if (argument == "--gui") {
       options.display = DisplayMode::Gui;
     } else if (argument == "--headless") {
       options.display = DisplayMode::Headless;
-    } else if (argument == "--log" && i + 1 < argc) {
+    } else
+#endif
+    if (argument == "--log" && i + 1 < argc) {
       options.logPath = argv[++i];
       if (options.logPath.empty()) {
         std::cerr << "Ruta de log vacia\n";
         return false;
       }
       options.hasLogPath = true;
+#ifdef EQUIPEGO_BENCHMARK_CLI
     } else if (argument == "--scale" && i + 1 < argc) {
       const std::string value = argv[++i];
       try {
@@ -259,6 +271,7 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
         std::cerr << "Duracion invalida (0 a 86400 segundos simulados)\n";
         return false;
       }
+#endif
     } else {
       std::cerr << "Opcion desconocida: " << argument << '\n';
       return false;
@@ -439,19 +452,15 @@ int main(int argc, char *argv[]) {
   if (!loadAndValidateConfig(2, configArgs, config)) return 1;
   if (options.hasLogPath) config.logFilePath = options.logPath;
 
-  // El arranque normal abre la ventana incluso si falta DISPLAY:
-  // en ese caso SimulationDashboard::open() informa un error legible.
-  // --headless se conserva SOLO como interfaz de test mientras se migra
-  // el banco de pruebas (pendiente de conformidad estricta con seccion 5).
+  // DP12.8: la interfaz publica SIEMPRE abre una ventana.
+  // Las opciones de diagnostico solo se compilan en delivery_sim_bench.
+#ifdef EQUIPEGO_BENCHMARK_CLI
   const bool showGui = options.display != DisplayMode::Headless;
-
-  // Si no se indica --scale, respetamos SIEMPRE el JSON del usuario.
-  if (options.hasScale) {
-    config.simulation.timeScale = options.scale;
-  }
-  if (options.hasDuration) {
-    config.simulation.durationS = options.duration;
-  }
+  if (options.hasScale) config.simulation.timeScale = options.scale;
+  if (options.hasDuration) config.simulation.durationS = options.duration;
+#else
+  const bool showGui = true;
+#endif
 
   try {
     // Instalar manejadores antes de arrancar hilos del simulador.

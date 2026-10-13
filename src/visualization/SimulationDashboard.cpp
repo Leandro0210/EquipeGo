@@ -24,6 +24,16 @@ cv::Scalar colorFor(std::size_t i) {
   return kColors[i % kColors.size()];
 }
 
+// BGR. El color interior refleja el estado, no la identidad.
+cv::Scalar stateColor(const CourierSnapshot &s) {
+  if (s.state == CourierState::Broken) return {40, 40, 215};
+  if (s.active && s.active->state == OrderState::PickedUp)
+    return {48, 165, 35};
+  if (s.active) return {35, 150, 245};
+  if (s.motion) return {210, 135, 60};
+  return {122, 122, 122};
+}
+
 void drawText(cv::Mat &image, const std::string &text, int x, int y,
               double scale = 0.39,
               cv::Scalar color = cv::Scalar(40, 40, 40)) {
@@ -136,17 +146,34 @@ cv::Mat SimulationDashboard::drawFrame(
     }
   }
 
+  // Cada pedido ACTIVO muestra su destino de entrega sobre el mapa.
+  // La marca esta fija en un nodo real, incluso antes del pickup.
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    const auto &s = samples[i].courier;
+    if (!s.active) continue;
+    const cv::Point2d p = nodePoint(s.active->deliveryNodeId);
+    const cv::Point target(cvRound(p.x), cvRound(p.y));
+    cv::drawMarker(frame, target, cv::Scalar(20, 20, 245),
+                   cv::MARKER_DIAMOND, i == selected ? 22 : 14,
+                   i == selected ? 3 : 2, cv::LINE_AA);
+    if (i == selected) {
+      drawText(frame, "DEST " + s.active->orderId,
+               target.x + 9, target.y - 11, 0.34,
+               cv::Scalar(15, 15, 210));
+    }
+  }
+
   // Centro REAL: desplazar un punto para separar motos lo sacaria
   // artificialmente de la calle. Dibujamos todas en su posicion autentica.
   for (std::size_t i = 0; i < samples.size(); ++i) {
     const cv::Point2d actual = samples[i].point;
     const cv::Point center(cvRound(actual.x), cvRound(actual.y));
-    cv::circle(frame, center, i == selected ? 10 : 7,
+    cv::circle(frame, center, i == selected ? 11 : 8,
                i == selected ? cv::Scalar(0, 210, 255)
-                             : cv::Scalar(255, 255, 255),
+                             : colorFor(i),
                cv::FILLED, cv::LINE_AA);
     cv::circle(frame, center, i == selected ? 7 : 5,
-               colorFor(i), cv::FILLED, cv::LINE_AA);
+               stateColor(samples[i].courier), cv::FILLED, cv::LINE_AA);
     if (samples.size() <= 8 || i == selected) {
       drawText(frame, samples[i].courier.id,
                center.x + 8, center.y - 8, 0.33, colorFor(i));
@@ -180,7 +207,7 @@ cv::Mat SimulationDashboard::drawFrame(
                     cv::Scalar(222, 239, 255), cv::FILLED);
     }
     cv::circle(frame, cv::Point(x + 8, y - 4), 7,
-               colorFor(i), cv::FILLED, cv::LINE_AA);
+               stateColor(s), cv::FILLED, cv::LINE_AA);
     drawText(frame, s.id + " | " + s.currentNode +
                  " | bolsa: " + std::to_string(s.reservedCount),
              x + 22, y, 0.39);
@@ -194,6 +221,9 @@ cv::Mat SimulationDashboard::drawFrame(
     }
     drawText(frame, v.phase, x + 22, y + 33, 0.33);
   }
+
+  drawText(frame, "G=libre N=recoge V=entrega R=averia D=destino",
+           x, 143, 0.32);
 
   // DP12.1: licencia OpenStreetMap: atribucion VISIBLE en cada cuadro.
   // cv::putText utiliza Hershey, que no interpreta el simbolo UTF-8 (c).

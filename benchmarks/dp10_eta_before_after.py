@@ -65,7 +65,7 @@ def args_from_cli():
     parser.add_argument("--label", choices=("antes", "despues"), default="antes")
     parser.add_argument("--config", type=Path, default=Path("config/equipetrol.json"))
     parser.add_argument("--binary", type=Path,
-                        default=Path.home() / "build-equipego/delivery_sim")
+                        default=Path.home() / "build-equipego/delivery_sim_bench")
     parser.add_argument("--output", type=Path,
                         default=Path.home() / "equipego_benchmarks/dp10")
     parser.add_argument("--compare", type=Path, default=None,

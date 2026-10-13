@@ -54,7 +54,7 @@ def get_args():
     parser.add_argument("--repeats", type=int, default=1,
                         help="Repeticiones por escenario (predeterminado: 1)")
     parser.add_argument("--config", type=Path, default=Path("config/equipetrol.json"))
-    parser.add_argument("--binary", type=Path, default=Path.home() / "build-equipego/delivery_sim")
+    parser.add_argument("--binary", type=Path, default=Path.home() / "build-equipego/delivery_sim_bench")
     parser.add_argument("--output", type=Path, default=Path.home() / "equipego_benchmarks/dp8_6")
     parser.add_argument("--timeout", type=int, default=0,
                         help="Timeout por simulacion en segundos reales (0 = automatico)")

@@ -152,7 +152,7 @@ def trial(binary: Path, config: Path, root: Path, couriers: int, mode: str,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     repo = Path(__file__).resolve().parents[1]
-    parser.add_argument('--binary', type=Path, default=Path.home()/'build-equipego/delivery_sim')
+    parser.add_argument('--binary', type=Path, default=Path.home()/'build-equipego/delivery_sim_bench')
     parser.add_argument('--config', type=Path, default=repo/'config/equipetrol.json')
     parser.add_argument('--couriers', default='8,64')
     parser.add_argument('--modes', default='headless,gui')

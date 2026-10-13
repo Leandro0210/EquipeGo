@@ -68,7 +68,7 @@ def get_args():
     parser.add_argument("--config", type=Path,
                         default=Path("config/equipetrol.json"))
     parser.add_argument("--binary", type=Path,
-                        default=Path.home() / "build-equipego/delivery_sim")
+                        default=Path.home() / "build-equipego/delivery_sim_bench")
     parser.add_argument("--output", type=Path,
                         default=Path.home() / "equipego_benchmarks/dp8_6")
     parser.add_argument("--timeout", type=int, default=0,

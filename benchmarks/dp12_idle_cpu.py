@@ -117,7 +117,7 @@ def run_trial(binary: Path, original: Path, destination: Path,
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=Path.home() / "build-equipego/delivery_sim")
+    parser.add_argument("--binary", type=Path, default=Path.home() / "build-equipego/delivery_sim_bench")
     parser.add_argument("--config", type=Path, default=root / "config/equipetrol.json")
     parser.add_argument("--output", type=Path, default=Path.home() / "equipego_benchmarks/dp12_idle")
     parser.add_argument("--couriers", default="8,64", help="lista separada por comas")

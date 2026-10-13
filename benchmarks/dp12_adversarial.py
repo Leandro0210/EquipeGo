@@ -390,7 +390,7 @@ def main() -> int:
     parser.add_argument('--phase',required=True, choices=('invalid','valid','signals','all'))
     parser.add_argument('--mode',default='gui',choices=('gui','headless'),
                         help='GUI por defecto; headless SOLO diagnostico, no valida requisito de ventana')
-    parser.add_argument('--binary',type=Path,default=Path.home()/'build-equipego/delivery_sim')
+    parser.add_argument('--binary',type=Path,default=Path.home()/'build-equipego/delivery_sim_bench')
     parser.add_argument('--config',type=Path,default=ROOT/'config/equipetrol.json')
     parser.add_argument('--output',type=Path,default=Path.home()/'equipego_benchmarks/dp12_adversarial')
     args=parser.parse_args()

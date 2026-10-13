@@ -74,6 +74,15 @@ set(SOURCES
 add_executable(delivery_sim ${SOURCES})
 configure_equipego_target(delivery_sim)
 
+# Binario auxiliar OPCIONAL: no se compila en el build oficial normal.
+# Solo para reproducir ensayos, se activa con -DEQUIPEGO_BUILD_BENCHMARK=ON.
+option(EQUIPEGO_BUILD_BENCHMARK "Build extra diagnostic executable" OFF)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(delivery_sim_bench ${SOURCES})
+    configure_equipego_target(delivery_sim_bench)
+    target_compile_definitions(delivery_sim_bench PRIVATE EQUIPEGO_BENCHMARK_CLI=1)
+endif()
+
 # =====================================================
 # DP8 - MAPA BASE
 # =====================================================

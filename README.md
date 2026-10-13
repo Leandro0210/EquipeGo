@@ -4,7 +4,7 @@
 
 EquipeGo simula una flota de repartidores independientes, un generador de pedidos por ráfagas, un despachador con cálculo concurrente de ETA, recursos de recogida limitados, averías y rescate de pedidos. La interfaz se dibuja con OpenCV sobre una imagen del mapa de Equipetrol. La corrección se contrasta con un registro JSONL y un resumen final.
 
-> **Estado tras DP.12.2 (rama `avance-12`):** el arranque normal abre OpenCV y conserva `simulation.timeScale` del JSON; el reloj y el límite de duración parten de un mismo instante. Siguen existiendo las opciones auxiliares `--headless`, `--gui`, `--scale` y `--duration` usadas en los experimentos; la rúbrica solo describe `--log` y afirma que no existe modo sin ventana. Por tanto, la interfaz de entrega **todavía necesita revisión** antes de declarar cumplimiento estricto. Las ejecuciones anteriores de DP.10 y DP.11 corresponden a versiones previas de la aplicación.
+> **DP.12.8 (interfaz oficial):** `delivery_sim` acepta únicamente `config.json` y `--log RUTA`; siempre abre la ventana OpenCV. Para ensayos instrumentados se compila por separado `delivery_sim_bench`, que admite `--headless`, `--gui`, `--scale` y `--duration` sin alterar la interfaz evaluada. Los registros anteriores corresponden al commit `6ad35d1`; volver a validar la compilación final luego del cambio.
 
 ## 1. Requisitos, dependencias y compilación (DP.0)
 
@@ -237,16 +237,37 @@ Cada carpeta contiene versiones, configuración de cada prueba, `stdout.txt`, `s
 | `evidencias/dp10/` | Tabla antes/después, configuraciones, JSONL y resúmenes crudos |
 | `evidencias/dp11/` | 12 ejecuciones instrumentadas y archivos originales sin editar |
 
+## 8.1 Interfaz pública y modo de pruebas (DP.12.8)
+
+Desde el directorio de compilación, **la interfaz oficial** es:
+
+```bash
+./delivery_sim ../config/equipetrol.json
+./delivery_sim ../config/equipetrol.json --log run1.log
+```
+
+Este ejecutable abre OpenCV obligatoriamente y rechaza `--headless`, `--gui`, `--scale` y `--duration`. Si no hay pantalla, informa un error en lugar de ejecutar oculto.
+
+**Solo para diagnósticos**, activar el segundo target con `cmake -S . -B build-bench -DEQUIPEGO_BUILD_BENCHMARK=ON` y compilar. Por defecto solo se compila la aplicación oficial. El auxiliar `delivery_sim_bench` se ejecuta así:
+
+```bash
+./delivery_sim_bench ../config/equipetrol.json --headless --scale 60 --duration 300 --log ensayo.jsonl
+```
+
+Los informes existentes conservan sus comandos originales y SHA de ejecutables. Para reproducir un escenario con banderas de diagnóstico después de DP.12.8, apuntar `--binary` o el script a `delivery_sim_bench`.
+
+En OpenCV, las motos muestran color interior según estado (gris libre, naranja hacia restaurante, verde entrega, rojo avería); rombos rojos marcan destinos de los pedidos activos. Se conserva la atribución OSM.
+
 ## 9. Lista de verificación antes de entregar (obligatoria)
 
 - [ ] Confirmar la imagen original de OSM y la legibilidad del Segundo, Tercer y Cuarto Anillo y avenida San Martín, así como atribución **visible** en la ventana.
 - [x] DP.12.1: respetar `timeScale` del JSON y abrir GUI en ejecución normal; DP.12.2: sincronizar el reloj con el deadline (pruebas normales y TSAN 9/9, y prueba temporal aprobadas).
-- [ ] Resolver el modo opcional `--headless`, prohibido en sentido literal por la rúbrica, sin perder la reproducibilidad de los experimentos; validar atribución visual.
-- [ ] Verificar con configuraciones externas y varias ejecuciones: 64 motos, cientos de nodos, `pickupSlots=1`, `bagCapacity=1`, ráfagas grandes, `breakdownProbability=1`, rutas inaccesibles e invalidaciones del JSON.
-- [ ] Validar que la GUI represente el trayecto realmente recorrido, no solo una predicción independiente; comprobar fluidez y el mapa para 64 motos.
-- [ ] Medir CPU con casi cero pedidos y repartidores inactivos; separar costo GUI del costo concurrente.
+- [x] DP.12.8: separar `delivery_sim` (solo interfaz oficial) y `delivery_sim_bench` (diagnóstico). [ ] Validar atribución visual con captura.
+- [x] DP.12.5: 22/22 pruebas adversarias (12 inválidos, 7 válidos, 3 señales), evidencias en `evidencias/dp12/adversarial/`.
+- [x] DP.12.4: movimiento basado en snapshots reales y test de segmento/avería. [ ] Inspección humana de la ventana con 64 motos.
+- [x] DP.12.3: CPU ociosa estable medida con 8 y 64 motos, separando el costo de OpenCV (`evidencias/dp12/cpu_ociosa/`).
 - [ ] Confirmar con el docente si la fila «política de lanzamiento declarada» admite el pool explícito de `QuoteExecutor` o exige `std::launch::async` en trabajo real.
-- [ ] Probar compilación limpia de la sección 8 y versión final instrumentada, comparándolas con los ensayos de DP.11.
+- [x] DP.12.6-7: clon limpio `6ad35d1`, CTest 10/10 + TSAN 10/10 y 12/12 instrumentadas (6 TSAN, 6 ASAN/UBSAN). [ ] Revalidar si cambia el código oficial.
 
 **No marcar DP.0–DP.12 como cumplimiento completo solo por las pruebas ya realizadas:** en la rúbrica hay verificaciones de GUI, mapa y entradas adversarias que deben comprobarse en la versión exacta de entrega.
 
