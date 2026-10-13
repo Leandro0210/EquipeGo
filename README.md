@@ -43,7 +43,7 @@ Las advertencias del compilador deben evaluarse con `-Wall -Wextra`, opciones ya
 
 ## 2. Mapa, escenario y entrada (DP.1)
 
-La configuración principal está en [`config/equipetrol.json`](config/equipetrol.json). Incluye **30 intersecciones, 42 segmentos de calle y 6 restaurantes**, y de esos segmentos **7 están marcados como unidireccionales**. El fondo configurado es [`data/equipetrol.png`](data/equipetrol.png), cuyo origen y correspondencia geográfica deben comprobarse visualmente contra OpenStreetMap antes de entregar.
+La configuración principal está en [`config/equipetrol.json`](config/equipetrol.json). Incluye **30 intersecciones, 42 segmentos de calle y 6 restaurantes**, y de esos segmentos **7 están marcados como unidireccionales**. El fondo configurado es [`data/equipetrol.png`](data/equipetrol.png), elaborado mediante una **captura manual de la página oficial de OpenStreetMap**, recortada por el autor para mostrar la zona de Equipetrol (Santa Cruz de la Sierra, Bolivia). La procedencia está documentada en [`evidencias/dp12/procedencia_mapa_osm.md`](evidencias/dp12/procedencia_mapa_osm.md). Los límites declarados deben contrastarse con la imagen base; disponer de la captura no certifica por sí solo la precisión de esa calibración.
 
 Límites registrados (grados decimales):
 
@@ -295,8 +295,8 @@ El ejecutable público de entrega (`delivery_sim`) permanece separado: no admite
 - [x] Inspección visual de ocho motos, estados por color, destinos activos y atribución de OpenStreetMap; [captura adjunta](evidencias/dp12/validacion_visual_20261013.png). Una captura estática no certifica por sí sola la fluidez de toda la animación.
 - [x] Progreso real de las motos en segmentos del grafo y congelación ante averías validados con `test_dp12_motion` y CTest.
 - [x] CPU ociosa estable medida para 8 y 64 motos; diferencia entre costo del visor y costo de hilos de repartidores documentada en `evidencias/dp12/cpu_ociosa/`.
-- [ ] Verificación visual humana del **escenario de 64 motos** bajo ejecución prolongada: el escenario adversario superó la prueba automatizada, pero la captura aportada representa ocho motos.
-- [ ] Conservar referencia verificable del **origen exacto y exportación** de `data/equipetrol.png` y comprobar sobre el mapa real la cobertura de los anillos y avenida San Martín. La captura visible no documenta toda esa procedencia.
+- [x] Verificación visual del **escenario de 64 motos** mediante [captura de 64 repartidores](evidencias/dp12/validacion_visual_64_motos_20261013.png), prueba de 600 s simulados con 120 pedidos creados, 59 entregados y 61 pendientes, sin rechazos; captura estática no demuestra por sí sola la fluidez cuadro a cuadro.
+- [x] Documentada la **procedencia de la captura manual de OpenStreetMap** y el recorte realizado por el autor ([detalle](evidencias/dp12/procedencia_mapa_osm.md)); atribución OSM visible. [ ] Comprobar que el cuadro geográfico registrado corresponda con exactitud al recorte y que los anillos y la avenida San Martín resulten reconocibles; no consta enlace a la vista/fecha exactos de captura.
 - [ ] Confirmar con el docente, si fuese necesario, si la política de planificación explícita de tareas del pool `QuoteExecutor` satisface la fila sobre futuros y lanzamiento. La rúbrica menciona una política de lanzamiento declarada, no exige literalmente `std::launch::async`.
 
 **Estado:** las evidencias de compilación, contrato, estrés, pruebas dinámicas y GUI principal están registradas. Los tres puntos sin marcar son revisiones externas o visuales; no se declaran aprobados automáticamente.
