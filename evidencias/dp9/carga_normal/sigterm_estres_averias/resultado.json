@@ -1,0 +1,44 @@
+{
+  "case": "sigterm_estres_averias",
+  "signal": "SIGTERM",
+  "elapsed_before_signal_s": 6.012,
+  "shutdown_s": 0.074,
+  "observed_before_signal": {
+    "orderCreated": 532,
+    "orderAssigned": 8,
+    "orderRejected": 504,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1
+  },
+  "summary": {
+    "avgDeliveryMs": 0.0,
+    "breakdowns": 8,
+    "created": 532,
+    "delivered": 0,
+    "deliveredPerCourier": {
+      "c0": 0,
+      "c1": 0,
+      "c2": 0,
+      "c3": 0,
+      "c4": 0,
+      "c5": 0,
+      "c6": 0,
+      "c7": 0
+    },
+    "maxDeliveryMs": 0,
+    "pending": 28,
+    "reassigned": 0,
+    "rejected": 504
+  },
+  "event_counts": {
+    "orderCreated": 532,
+    "orderAssigned": 8,
+    "orderRejected": 504,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1,
+    "simulationStopping": 1
+  },
+  "stderr_bytes": 0
+}

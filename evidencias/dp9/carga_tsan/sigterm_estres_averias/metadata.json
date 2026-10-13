@@ -1,0 +1,26 @@
+{
+  "command": [
+    "/home/leandro/build-equipego-tsan/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp9_2/20261012_192841/sigterm_estres_averias/config.json",
+    "--headless",
+    "--duration",
+    "0",
+    "--scale",
+    "60.0",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp9_2/20261012_192841/sigterm_estres_averias/events.jsonl"
+  ],
+  "signal": 15,
+  "elapsed_before_signal_s": 6.045,
+  "observed_before_signal": {
+    "orderCreated": 478,
+    "orderAssigned": 8,
+    "orderRejected": 450,
+    "courierBreakdown": 8,
+    "pickupStarted": 1,
+    "orderPickedUp": 1
+  },
+  "shutdown_s": 0.11433224300071743,
+  "exit_code": 0,
+  "error": null
+}

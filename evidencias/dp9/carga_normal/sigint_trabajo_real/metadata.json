@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/home/leandro/build-equipego/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp9_2/20261012_191848/sigint_trabajo_real/config.json",
+    "--headless",
+    "--duration",
+    "0",
+    "--scale",
+    "60.0",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp9_2/20261012_191848/sigint_trabajo_real/events.jsonl"
+  ],
+  "signal": 2,
+  "elapsed_before_signal_s": 5.002,
+  "observed_before_signal": {
+    "orderCreated": 42,
+    "orderAssigned": 25,
+    "pickupStarted": 8,
+    "orderPickedUp": 8,
+    "orderDelivered": 1
+  },
+  "shutdown_s": 0.06445904399970459,
+  "exit_code": 0,
+  "error": null
+}
