@@ -239,6 +239,44 @@ cv::Mat SimulationDashboard::drawFrame(
     drawText(frame, v.phase, x + 22, y + 33, 0.33);
   }
 
+  // DP12.1: licencia OpenStreetMap: atribucion VISIBLE en cada cuadro.
+  // cv::putText utiliza Hershey, que no interpreta el simbolo UTF-8 (c).
+  // Si la configuracion contiene el signo de copyright, dibujamos
+  // explicitamente su glifo (C encerrada en un circulo), seguido del
+  // resto del texto original. No dependemos del nombre del proveedor.
+  std::string attributionText = config.map.attribution;
+  const std::string copyrightUtf8 = "\xC2\xA9";
+  const auto copyrightPosition = attributionText.find(copyrightUtf8);
+  const bool containsCopyright = copyrightPosition != std::string::npos;
+  if (containsCopyright) {
+    attributionText.erase(copyrightPosition, copyrightUtf8.size());
+    while (!attributionText.empty() && attributionText.front() == ' ') {
+      attributionText.erase(attributionText.begin());
+    }
+  }
+
+  if (frame.rows >= 32 && frame.cols >= base.cols + 64) {
+    const int panelLeft = base.cols + 6;
+    const int panelTop = frame.rows - 31;
+    cv::rectangle(frame,
+                  cv::Rect(panelLeft, panelTop, kPanelWidth - 12, 27),
+                  cv::Scalar(239, 239, 239), cv::FILLED);
+    const int baseline = frame.rows - 12;
+    int textLeft = panelLeft + 10;
+    if (containsCopyright) {
+      const cv::Point center(textLeft + 7, baseline - 5);
+      cv::circle(frame, center, 8, cv::Scalar(52, 52, 52), 1,
+                 cv::LINE_AA);
+      cv::putText(frame, "C", cv::Point(textLeft + 3, baseline - 1),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.34, cv::Scalar(52, 52, 52),
+                  1, cv::LINE_AA);
+      textLeft += 22;
+    }
+    cv::putText(frame, attributionText, cv::Point(textLeft, baseline),
+                cv::FONT_HERSHEY_SIMPLEX, 0.33,
+                cv::Scalar(52, 52, 52), 1, cv::LINE_AA);
+  }
+
   return frame;
 }
 

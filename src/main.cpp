@@ -201,16 +201,6 @@ namespace {
 
 enum class DisplayMode { Auto, Gui, Headless };
 
-bool graphicsEnvironmentPresent() {
-#if defined(__linux__)
-  const char *x = std::getenv("DISPLAY");
-  const char *wayland = std::getenv("WAYLAND_DISPLAY");
-  return (x && *x) || (wayland && *wayland);
-#else
-  return true;
-#endif
-}
-
 struct RunOptions {
   DisplayMode display = DisplayMode::Auto;
   bool hasScale = false;
@@ -449,15 +439,15 @@ int main(int argc, char *argv[]) {
   if (!loadAndValidateConfig(2, configArgs, config)) return 1;
   if (options.hasLogPath) config.logFilePath = options.logPath;
 
-  const bool showGui =
-      options.display == DisplayMode::Gui ||
-      (options.display == DisplayMode::Auto && graphicsEnvironmentPresent());
+  // El arranque normal abre la ventana incluso si falta DISPLAY:
+  // en ese caso SimulationDashboard::open() informa un error legible.
+  // --headless se conserva SOLO como interfaz de test mientras se migra
+  // el banco de pruebas (pendiente de conformidad estricta con seccion 5).
+  const bool showGui = options.display != DisplayMode::Headless;
 
+  // Si no se indica --scale, respetamos SIEMPRE el JSON del usuario.
   if (options.hasScale) {
     config.simulation.timeScale = options.scale;
-  } else if (showGui) {
-    // La simulacion visual no debe correr a 60x por defecto.
-    config.simulation.timeScale = 3.0;
   }
   if (options.hasDuration) {
     config.simulation.durationS = options.duration;
