@@ -364,7 +364,7 @@ def generate_report(output: Path, mode: str, results: list[dict[str, Any]],
         lines.extend(["", f"### {r['signal']} — {r['status']}", "",
                       "Comando completo:", "",
                       "```bash", r["exact_command_shell"], "```", "",
-                      f"Datos crudos: `{r['signal'].lower()}_rep_" 
+                      f"Datos crudos: `{r['signal'].lower()}_rep_"
                       "NN/stdout.txt`, `stderr.txt`, `events.jsonl`, "
                       "`config.json`, `metadata.json`.", ""])
         if r.get("error"):
