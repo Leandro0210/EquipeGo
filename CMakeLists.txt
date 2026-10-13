@@ -228,4 +228,15 @@ configure_equipego_target(test_live_event_stats)
 add_test(NAME test_live_event_stats COMMAND test_live_event_stats)
 list(APPEND DP_TEST_NAMES test_live_event_stats)
 
+# DP12.4: posicion publicada por Courier, sin reloj visual independiente.
+add_executable(test_dp12_motion
+    tests/test_dp12_motion.cpp
+    src/core/Logger.cpp
+    src/map/RoadNetwork.cpp
+    src/fleet/Courier.cpp
+)
+configure_equipego_target(test_dp12_motion)
+add_test(NAME test_dp12_motion COMMAND test_dp12_motion)
+list(APPEND DP_TEST_NAMES test_dp12_motion)
+
 set_tests_properties(${DP_TEST_NAMES} PROPERTIES TIMEOUT 30)

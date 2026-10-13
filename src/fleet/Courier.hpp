@@ -8,6 +8,8 @@
 #include "orders/Order.hpp"
 #include "restaurants/RestaurantManager.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
@@ -31,12 +33,21 @@ struct CourierOrderSnapshot {
   OrderState state = OrderState::Created;
 };
 
+// Progreso sobre el segmento que el hilo del repartidor esta recorriendo.
+// Se publica como copia; la GUI nunca accede a datos mutables de Courier.
+struct CourierMotionSnapshot {
+  std::string from;
+  std::string to;
+  double progress = 0.0;  // fraccion [0, 1] del segmento real
+};
+
 struct CourierSnapshot {
   std::string id;
   std::string currentNode;
   CourierState state = CourierState::Idle;
   std::optional<CourierOrderSnapshot> active;
   std::optional<CourierOrderSnapshot> nextOrder;
+  std::optional<CourierMotionSnapshot> motion;
   std::size_t reservedCount = 0;
 };
 
@@ -61,6 +72,17 @@ private:
   std::string currentNode;
   CourierState state = CourierState::Idle;
   bool everBroken = false;
+
+  // Exclusivamente bajo stateMutex: misma fuente de verdad para simulacion y GUI.
+  struct MotionInterval {
+    std::string from;
+    std::string to;
+    std::chrono::steady_clock::time_point started;
+    double wholeSegmentSeconds = 0.0;
+    double stopFraction = 1.0;
+    bool frozen = false;
+  };
+  std::optional<MotionInterval> motionInterval;
 
   std::optional<std::string> destination;
   bool stopRequested = false;
@@ -119,6 +141,16 @@ public:
     snapshot.id = id;
     snapshot.currentNode = currentNode;
     snapshot.state = state;
+    if (motionInterval) {
+      const MotionInterval &m = *motionInterval;
+      const double elapsed = std::chrono::duration<double>(
+          std::chrono::steady_clock::now() - m.started).count();
+      const double fraction = m.frozen || m.wholeSegmentSeconds <= 0.0
+                                  ? m.stopFraction
+                                  : std::clamp(elapsed / m.wholeSegmentSeconds,
+                                               0.0, m.stopFraction);
+      snapshot.motion = CourierMotionSnapshot{m.from, m.to, fraction};
+    }
     snapshot.reservedCount =
         assignedOrders.size() + blockedOrders.size() +
         (activeOrder ? 1u : 0u);

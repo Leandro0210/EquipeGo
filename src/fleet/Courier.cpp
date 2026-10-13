@@ -356,15 +356,30 @@ bool Courier::travelTo(const std::string &targetNode,
     {
       std::unique_lock<std::mutex> lock(stateMutex);
 
+      // El intervalo comienza inmediatamente antes de liberar el mutex
+      // durante la espera real. La GUI ve exactamente ese instante.
+      const double entireRealSeconds =
+          (segment.distanceMeters / speedMetersPerSecond) /
+          config.simulation.timeScale;
+      const double stopFraction = segment.distanceMeters > 0.0
+          ? std::clamp(distanceToTravel / segment.distanceMeters, 0.0, 1.0)
+          : 1.0;
+      motionInterval = MotionInterval{segment.from, segment.to,
+                                      std::chrono::steady_clock::now(),
+                                      entireRealSeconds, stopFraction, false};
+
       const bool interrupted =
           workCv.wait_for(lock, std::chrono::duration<double>(realSeconds),
                           [this] { return stopRequested; });
 
       if (interrupted || stopRequested) {
+        motionInterval.reset();
         return false;
       }
 
       if (breakdownHere) {
+        // Congelar en el punto REAL de la averia, incluso entre nodos.
+        motionInterval->frozen = true;
 
         // =====================================
         // DP7.2: REGISTRAR AVERIA REAL
@@ -384,6 +399,7 @@ bool Courier::travelTo(const std::string &targetNode,
 
       } else {
         currentNode = segment.to;
+        motionInterval.reset();
       }
     }
 

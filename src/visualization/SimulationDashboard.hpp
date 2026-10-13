@@ -8,7 +8,6 @@
 
 #include <opencv2/core.hpp>
 
-#include <chrono>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -17,16 +16,6 @@
 // Toda operacion HighGUI se ejecuta desde el hilo de main.
 class SimulationDashboard {
 private:
-  using Clock = std::chrono::steady_clock;
-
-  struct MotionTracker {
-    std::string node;
-    std::string target;
-    std::string next;
-    Clock::time_point since{};
-    bool active = false;
-  };
-
   struct VisualCourier {
     CourierSnapshot courier;
     cv::Point2d point;
@@ -38,7 +27,6 @@ private:
   const RoadNetwork &network;
   MapViewer mapViewer;
   cv::Mat base;
-  std::vector<MotionTracker> trackers;
   std::string title = "EquipeGo - Simulacion de entregas";
   std::size_t selected = 0;
   bool windowOpen = false;

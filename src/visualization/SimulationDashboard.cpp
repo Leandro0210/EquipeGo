@@ -14,7 +14,6 @@
 namespace {
 
 constexpr int kPanelWidth = 310;
-constexpr double kPi = 3.14159265358979323846;
 
 const std::array<cv::Scalar, 8> kColors = {{
     {245, 100, 40}, {35, 160, 245}, {75, 195, 65}, {220, 65, 180},
@@ -73,11 +72,6 @@ void SimulationDashboard::open() {
 
 std::vector<SimulationDashboard::VisualCourier>
 SimulationDashboard::takeSamples(Fleet &fleet) {
-  if (trackers.size() != fleet.size()) {
-    trackers.resize(fleet.size());
-  }
-
-  const auto now = Clock::now();
   std::vector<VisualCourier> result;
   result.reserve(fleet.size());
 
@@ -86,59 +80,32 @@ SimulationDashboard::takeSamples(Fleet &fleet) {
     item.courier = fleet.at(i).getSnapshot();
     const auto &s = item.courier;
 
-    // Los pedidos y estados se leen juntos bajo el mutex de Courier.
     if (s.state == CourierState::Broken) {
       item.phase = "AVERIADA";
     } else if (s.active) {
       const auto &o = *s.active;
       if (o.state == OrderState::PickedUp) {
         item.target = o.deliveryNodeId;
-        item.phase = s.currentNode == item.target
-                         ? "Finalizando entrega"
-                         : "ENTREGANDO AL CLIENTE";
+        item.phase = s.motion ? "ENTREGANDO AL CLIENTE" : "Finalizando entrega";
       } else {
         item.target = restaurantNode(o.restauranteId);
-        item.phase = s.currentNode == item.target
-                         ? "Esperando recogida"
-                         : "YENDO AL RESTAURANTE";
+        item.phase = s.motion ? "YENDO AL RESTAURANTE" : "Esperando recogida";
       }
+    } else if (s.motion) {
+      item.phase = "EN RUTA";
     } else if (s.nextOrder) {
       item.phase = "Pedido en espera";
     } else {
       item.phase = "Disponible";
     }
 
-    // La posicion entre nodos es una ESTIMACION visual. El nodo
-    // confirmado sigue siendo el informado por Courier::getSnapshot().
+    // Nunca usamos un cronometro del visor: el progreso procede del hilo
+    // Courier y del mismo segmento dirigido recorrido en travelTo().
     item.point = nodePoint(s.currentNode);
-    auto &tracker = trackers[i];
-    if (s.state != CourierState::Moving || item.target.empty() ||
-        item.target == s.currentNode) {
-      tracker.active = false;
-    } else {
-      const auto route = network.shortestRoute(s.currentNode, item.target);
-      if (!route || route->segments.empty()) {
-        tracker.active = false;
-      } else {
-        const auto &segment = route->segments.front();
-        if (!tracker.active || tracker.node != s.currentNode ||
-            tracker.target != item.target || tracker.next != segment.to) {
-          tracker.active = true;
-          tracker.node = s.currentNode;
-          tracker.target = item.target;
-          tracker.next = segment.to;
-          tracker.since = now;
-        }
-        const double speed = config.fleet.speedKmh / 3.6;
-        const double duration = segment.distanceMeters / speed /
-                                config.simulation.timeScale;
-        const double elapsed =
-            std::chrono::duration<double>(now - tracker.since).count();
-        const double progress = duration > 0.0
-                                    ? std::clamp(elapsed / duration, 0.0, 1.0)
-                                    : 1.0;
-        item.point += (nodePoint(segment.to) - item.point) * progress;
-      }
+    if (s.motion) {
+      const cv::Point2d from = nodePoint(s.motion->from);
+      const cv::Point2d to = nodePoint(s.motion->to);
+      item.point = from + (to - from) * s.motion->progress;
     }
     result.push_back(std::move(item));
   }
@@ -169,32 +136,21 @@ cv::Mat SimulationDashboard::drawFrame(
     }
   }
 
-  // Todos los identificadores se conservan, incluso si hay motos juntas.
+  // Centro REAL: desplazar un punto para separar motos lo sacaria
+  // artificialmente de la calle. Dibujamos todas en su posicion autentica.
   for (std::size_t i = 0; i < samples.size(); ++i) {
     const cv::Point2d actual = samples[i].point;
-    std::size_t count = 0;
-    std::size_t rank = 0;
-    for (std::size_t j = 0; j < samples.size(); ++j) {
-      const cv::Point2d delta = samples[j].point - actual;
-      if (delta.dot(delta) < 18.0 * 18.0) {
-        ++count;
-        if (j < i) ++rank;
-      }
-    }
-    cv::Point2d display = actual;
-    if (count > 1) {
-      const double angle = 2.0 * kPi * static_cast<double>(rank) / count;
-      display.x += 19.0 * std::cos(angle);
-      display.y += 19.0 * std::sin(angle);
-    }
-    const cv::Point center(cvRound(display.x), cvRound(display.y));
-    cv::circle(frame, center, i == selected ? 17 : 15,
+    const cv::Point center(cvRound(actual.x), cvRound(actual.y));
+    cv::circle(frame, center, i == selected ? 10 : 7,
                i == selected ? cv::Scalar(0, 210, 255)
                              : cv::Scalar(255, 255, 255),
                cv::FILLED, cv::LINE_AA);
-    cv::circle(frame, center, 12, colorFor(i), cv::FILLED, cv::LINE_AA);
-    drawText(frame, samples[i].courier.id, center.x - 8, center.y + 4,
-             0.34, cv::Scalar(255, 255, 255));
+    cv::circle(frame, center, i == selected ? 7 : 5,
+               colorFor(i), cv::FILLED, cv::LINE_AA);
+    if (samples.size() <= 8 || i == selected) {
+      drawText(frame, samples[i].courier.id,
+               center.x + 8, center.y - 8, 0.33, colorFor(i));
+    }
   }
 
   const int x = base.cols + 13;
