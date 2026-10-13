@@ -1,0 +1,8 @@
+caso,grupo,estado,salida,duracion_s,cierre_s,creados,entregados,rechazados,pendientes,averias,rafaga_max,errores
+baseline,valid,PASS,0,7.132,,207,1,142,64,0,12,
+slots_one,valid,PASS,0,4.436,,207,1,142,64,0,12,
+bag_one,valid,PASS,0,4.489,,207,0,159,48,0,12,
+burst_heavy,valid,PASS,0,4.494,,2016,1,1971,44,0,60,
+breakdowns_one,valid,PASS,0,7.413,,687,0,659,28,8,12,
+unreachable,valid,PASS,0,4.402,,639,3,592,44,0,16,
+large_64,valid,PASS,0,5.486,,59,9,0,50,0,7,

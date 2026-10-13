@@ -1,0 +1,1 @@
+Invalid config: incidents.breakdownProbability must be between 0 and 1.

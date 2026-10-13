@@ -1,0 +1,46 @@
+{
+  "label": "immediate_sigint",
+  "kind": "signals",
+  "command": [
+    "/home/leandro/build-equipego/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp12_adversarial/signals_gui_20261013T144219Z/immediate_sigint/config.json",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp12_adversarial/signals_gui_20261013T144219Z/immediate_sigint/events.jsonl",
+    "--gui"
+  ],
+  "mode": "gui",
+  "started_at_utc": "2026-10-13T14:42:19.553313+00:00",
+  "signal": "SIGINT",
+  "shutdown_s": 0.218,
+  "exit_code": 0,
+  "wall_s": 1.633,
+  "audit": {
+    "counts": {
+      "simulationStopping": 1
+    },
+    "summary": {
+      "avgDeliveryMs": 0.0,
+      "breakdowns": 0,
+      "created": 0,
+      "delivered": 0,
+      "deliveredPerCourier": {
+        "c0": 0,
+        "c1": 0,
+        "c2": 0,
+        "c3": 0,
+        "c4": 0,
+        "c5": 0,
+        "c6": 0,
+        "c7": 0
+      },
+      "maxDeliveryMs": 0,
+      "pending": 0,
+      "reassigned": 0,
+      "rejected": 0
+    },
+    "max_burst": 0,
+    "events": 1
+  },
+  "status": "PASS",
+  "errors": []
+}

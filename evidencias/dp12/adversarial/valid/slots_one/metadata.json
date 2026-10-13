@@ -1,0 +1,50 @@
+{
+  "label": "slots_one",
+  "kind": "valid",
+  "command": [
+    "/home/leandro/build-equipego/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp12_adversarial/valid_gui_20261013T144119Z/slots_one/config.json",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp12_adversarial/valid_gui_20261013T144119Z/slots_one/events.jsonl",
+    "--gui"
+  ],
+  "mode": "gui",
+  "started_at_utc": "2026-10-13T14:41:27.075375+00:00",
+  "exit_code": 0,
+  "wall_s": 4.436,
+  "audit": {
+    "counts": {
+      "orderCreated": 207,
+      "orderAssigned": 25,
+      "orderRejected": 142,
+      "pickupStarted": 8,
+      "orderPickedUp": 8,
+      "orderDelivered": 1,
+      "simulationStopping": 1
+    },
+    "summary": {
+      "avgDeliveryMs": 177406.0,
+      "breakdowns": 0,
+      "created": 207,
+      "delivered": 1,
+      "deliveredPerCourier": {
+        "c0": 0,
+        "c1": 0,
+        "c2": 0,
+        "c3": 0,
+        "c4": 0,
+        "c5": 0,
+        "c6": 0,
+        "c7": 1
+      },
+      "maxDeliveryMs": 177406,
+      "pending": 64,
+      "reassigned": 0,
+      "rejected": 142
+    },
+    "max_burst": 12,
+    "events": 392
+  },
+  "status": "PASS",
+  "errors": []
+}

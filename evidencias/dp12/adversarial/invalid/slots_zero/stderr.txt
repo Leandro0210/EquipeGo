@@ -1,0 +1,1 @@
+Invalid config: restaurant 'r0' must have pickupSlots >= 1.

@@ -1,0 +1,16 @@
+{
+  "label": "missing_nodes",
+  "kind": "invalid",
+  "command": [
+    "/home/leandro/build-equipego/delivery_sim",
+    "/home/leandro/equipego_benchmarks/dp12_adversarial/invalid_gui_20261013T143419Z/missing_nodes/config.json",
+    "--log",
+    "/home/leandro/equipego_benchmarks/dp12_adversarial/invalid_gui_20261013T143419Z/missing_nodes/events.jsonl"
+  ],
+  "mode": null,
+  "started_at_utc": "2026-10-13T14:34:21.044729+00:00",
+  "exit_code": 1,
+  "wall_s": 0.165,
+  "status": "PASS",
+  "errors": []
+}

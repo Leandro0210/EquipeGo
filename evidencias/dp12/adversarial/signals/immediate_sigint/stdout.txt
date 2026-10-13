@@ -1,0 +1,3 @@
+Simulation has started...
+{"event":"simulationStopping","t":7002}
+{"avgDeliveryMs":0.0,"breakdowns":0,"created":0,"delivered":0,"deliveredPerCourier":{"c0":0,"c1":0,"c2":0,"c3":0,"c4":0,"c5":0,"c6":0,"c7":0},"maxDeliveryMs":0,"pending":0,"reassigned":0,"rejected":0}

@@ -1,0 +1,13 @@
+{
+  "label": "missing_argument",
+  "kind": "invalid",
+  "command": [
+    "/home/leandro/build-equipego/delivery_sim"
+  ],
+  "mode": null,
+  "started_at_utc": "2026-10-13T14:34:19.868568+00:00",
+  "exit_code": 1,
+  "wall_s": 0.884,
+  "status": "PASS",
+  "errors": []
+}

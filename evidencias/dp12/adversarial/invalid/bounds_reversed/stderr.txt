@@ -1,0 +1,1 @@
+Invalid config: map.bounds must satisfy north > south and east > west.

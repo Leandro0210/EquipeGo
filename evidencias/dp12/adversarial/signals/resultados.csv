@@ -1,0 +1,4 @@
+caso,grupo,estado,salida,duracion_s,cierre_s,creados,entregados,rechazados,pendientes,averias,rafaga_max,errores
+immediate_sigint,signals,PASS,0,1.633,0.218,0,0,0,0,0,0,
+burst_sigterm,signals,PASS,0,0.534,0.116,103,0,59,44,0,58,
+breakdown_sigint,signals,PASS,0,0.877,0.124,24,0,0,24,2,12,

@@ -1,0 +1,12 @@
+{
+  "phase": "invalid",
+  "mode": "gui",
+  "timestamp_utc": "20261013T143419Z",
+  "binary": "/home/leandro/build-equipego/delivery_sim",
+  "binary_sha256": "57f555881888287dd9ba54298ab6548320a917c007eea99710046d505744b1a9",
+  "source_config": "/mnt/c/Users/leand/OneDrive/Desktop/6to Semestre/Computación concurrente paralela y distribuida/Bloque 1/EquipeGo/config/equipetrol.json",
+  "source_config_sha256": "67b6b1c0ee14c02fd17155d03ed78f18d6596820f4f54a60b917eb781c044ef6",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+  "git_commit": "5ce9793ddef8d097b2893e6df1f67ea3f47a1926",
+  "note": "Modo headless solo diagnostico; la rubrica exige ventana."
+}

@@ -1,0 +1,1 @@
+Uso: delivery_sim config.json [--gui|--headless] [--scale N] [--duration SEGUNDOS] [--log RUTA]

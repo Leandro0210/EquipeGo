@@ -1,0 +1,13 @@
+caso,grupo,estado,salida,duracion_s,cierre_s,creados,entregados,rechazados,pendientes,averias,rafaga_max,errores
+missing_argument,invalid,PASS,1,0.884,,,,,,,,
+malformed,invalid,PASS,1,0.168,,,,,,,,
+missing_map,invalid,PASS,1,0.115,,,,,,,,
+missing_nodes,invalid,PASS,1,0.165,,,,,,,,
+dangling_street,invalid,PASS,1,0.169,,,,,,,,
+dangling_restaurant,invalid,PASS,1,0.169,,,,,,,,
+slots_zero,invalid,PASS,1,0.432,,,,,,,,
+bounds_reversed,invalid,PASS,1,0.17,,,,,,,,
+missing_image,invalid,PASS,1,0.285,,,,,,,,
+probability_invalid,invalid,PASS,1,0.166,,,,,,,,
+time_scale_zero,invalid,PASS,1,0.171,,,,,,,,
+fleet_zero,invalid,PASS,1,0.166,,,,,,,,

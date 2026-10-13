@@ -1,0 +1,2 @@
+[ WARN:0@0.011] global loadsave.cpp:241 findDecoder imread_('/this/file/never/exists/dp125.png'): can't open/read file: check file path/integrity
+Invalid config: cannot read map image at '/this/file/never/exists/dp125.png'.
