@@ -461,7 +461,6 @@ int main(int argc, char *argv[]) {
     // 1. CREAR COMPONENTES ORIGINALES
     // =========================================
     SimulationClock clock;
-    clock.start(config.simulation.timeScale);
     EventLogger logger(config.logFilePath, true);
     RoadNetwork roadNetwork(config);
     OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
@@ -491,6 +490,13 @@ int main(int argc, char *argv[]) {
     }
     fleet.startRescue();
 
+    // DP12.2: reloj y deadline comparten origen temporal.
+    // La GUI ya esta abierta y toda la flota se ha inicializado.
+    // Los threads del despacho y del productor aun no han empezado;
+    // esto evita carreras al iniciar el SimulationClock.
+    const auto startTime = std::chrono::steady_clock::now();
+    clock.start(config.simulation.timeScale);
+
     // =========================================
     // 3. DESPACHADOR + MENSAJE INICIAL
     // =========================================
@@ -510,7 +516,6 @@ int main(int argc, char *argv[]) {
     // durationS == 0: ejecutar hasta SIGINT, SIGTERM o cierre GUI.
     // El deadline controla un maximo de tiempo, nunca una espera
     // obligatoria luego de que llegue una senal.
-    const auto startTime = std::chrono::steady_clock::now();
     const auto deadline = config.simulation.durationS > 0
         ? startTime + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                           std::chrono::duration<double>(
