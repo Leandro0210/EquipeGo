@@ -30,7 +30,6 @@ def replace_once(source: str, old: str, new: str, path: Path) -> str:
 
 
 def update_main(text: str, path: Path) -> str:
-    # El modo grafico automático NO puede reemplazar el valor timeScale del JSON.
     old_gui = '''bool graphicsEnvironmentPresent() {
 #if defined(__linux__)
   const char *x = std::getenv("DISPLAY");

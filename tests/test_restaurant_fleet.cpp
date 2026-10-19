@@ -56,7 +56,6 @@ int main(int argc, char *argv[]) {
     if (restaurant.id == "r3") {
       restaurant.pickupSlots = 1;
 
-      // Este test evalua cupos, no cocina.
       restaurant.prepTimeMinMs = 0;
       restaurant.prepTimeMaxMs = 0;
 
@@ -77,9 +76,6 @@ int main(int argc, char *argv[]) {
   bool integrationOk = false;
   bool shutdownOk = false;
 
-  // =============================================
-  // TEST 1: CUPOS COMPARTIDOS
-  // =============================================
 
   {
     Fleet fleet(config, network, clock);
@@ -134,9 +130,6 @@ int main(int argc, char *argv[]) {
                     gate->occupied() == 0;
   }
 
-  // =============================================
-  // TEST 2: APAGADO EN FILA
-  // =============================================
 
   {
     Fleet fleet(config, network, clock);

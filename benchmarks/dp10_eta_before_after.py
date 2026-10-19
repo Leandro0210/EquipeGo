@@ -27,7 +27,6 @@ import subprocess
 import sys
 import time
 
-# Reusar la auditoria DP8.6: misma semantica y mismas reglas de JSONL.
 import dp8_6_scalability as previous
 
 FIELDS = [
@@ -168,7 +167,6 @@ def run_one(args, root, binary, original, couriers, repeat, timeout):
     config["fleet"]["couriers"] = couriers
     (folder / "config.json").write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    # El log se guarda en cada carpeta aislada. No contaminar events.log de la raiz.
     command = [str(binary), str(folder / "config.json"), "--headless",
                "--scale", str(args.scale), "--duration", str(args.duration),
                "--log", str(folder / "events.log")]

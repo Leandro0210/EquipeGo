@@ -35,9 +35,6 @@ int main(int argc, char *argv[]) {
   bool passed = false;
 
   {
-    // Calculador artificial solo para esta prueba.
-    // Una tarea tarda 700 ms.
-    // Las demas devuelven inmediatamente una ETA.
     QuoteCalculator testCalculator =
         [&quoteNumber](const std::string &, const std::string &,
                        const std::string &) -> double {
@@ -93,17 +90,10 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Cotizaciones fallidas: " << batch.failures.size() << '\n';
 
-    // Hay 7 respuestas rapidas y 1 tardia.
-    // El margen de 500 ms contempla la carga
-    // del sistema de pruebas, no cambia el
-    // plazo interno del Dispatcher (200 ms).
     passed = batch.quotes.size() == 7 && batch.failures.size() == 1 &&
              checkedIds.size() == 8 && timeoutFound && correctEtas &&
              elapsedMs < 500.0;
 
-    // Al salir, el destructor del Dispatcher
-    // espera al trabajador lento y libera
-    // sus recursos de forma ordenada.
   }
 
   fleet.requestStop();

@@ -6,24 +6,15 @@
 #include <stdexcept>
 #include <utility>
 
-// =====================================================
-// CONSTRUCTOR
-// =====================================================
 
 OrderBook::OrderBook(std::size_t maxPending) : maxPending(maxPending) {}
 
-// =====================================================
-// NOTIFICACIONES COMPARTIDAS
-// =====================================================
 
 void OrderBook::setNotificationSignal(std::shared_ptr<CapacitySignal> signal) {
   std::lock_guard<std::mutex> lock(bookMutex);
   wakeSignal = std::move(signal);
 }
 
-// =====================================================
-// INSERTAR PEDIDO
-// =====================================================
 
 bool OrderBook::tryAdd(Order &&order) {
 
@@ -32,8 +23,6 @@ bool OrderBook::tryAdd(Order &&order) {
   {
     std::lock_guard<std::mutex> lock(bookMutex);
 
-    // La capacidad incluye la cola y los pedidos
-    // extraidos que siguen esperando asignacion.
     if (stopRequested || orders.size() + inFlight >= maxPending) {
       return false;
     }
@@ -43,11 +32,8 @@ bool OrderBook::tryAdd(Order &&order) {
     signal = wakeSignal;
   }
 
-  // Despertar consumidores bloqueados en OrderBook.
   ordersCv.notify_one();
 
-  // Despertar al Dispatcher si esta esperando
-  // capacidad, un nuevo pedido o un vencimiento.
   if (signal) {
     signal->notifyChange();
   }
@@ -55,9 +41,6 @@ bool OrderBook::tryAdd(Order &&order) {
   return true;
 }
 
-// =====================================================
-// EXTRAER PEDIDO CON ESPERA BLOQUEANTE
-// =====================================================
 
 std::optional<Order> OrderBook::waitAndTake() {
 
@@ -65,7 +48,6 @@ std::optional<Order> OrderBook::waitAndTake() {
 
   ordersCv.wait(lock, [this] { return stopRequested || !orders.empty(); });
 
-  // Preservar la cola durante el apagado.
   if (stopRequested) {
     return std::nullopt;
   }
@@ -73,15 +55,11 @@ std::optional<Order> OrderBook::waitAndTake() {
   Order order = std::move(orders.front());
   orders.pop_front();
 
-  // El Dispatcher posee temporalmente el pedido.
   ++inFlight;
 
   return std::optional<Order>(std::move(order));
 }
 
-// =====================================================
-// EXTRAER SIN BLOQUEAR
-// =====================================================
 
 std::optional<Order> OrderBook::tryTake() {
 
@@ -99,9 +77,6 @@ std::optional<Order> OrderBook::tryTake() {
   return std::optional<Order>(std::move(order));
 }
 
-// =====================================================
-// FINALIZAR LA RESERVA DE UN PEDIDO
-// =====================================================
 
 void OrderBook::completeTaken() {
 
@@ -114,9 +89,6 @@ void OrderBook::completeTaken() {
   --inFlight;
 }
 
-// =====================================================
-// DETENER ORDERBOOK
-// =====================================================
 
 void OrderBook::requestStop() {
 
@@ -136,9 +108,6 @@ void OrderBook::requestStop() {
   }
 }
 
-// =====================================================
-// RECUPERAR LOS PEDIDOS QUE QUEDARON EN COLA
-// =====================================================
 
 std::vector<Order> OrderBook::takeRemaining() {
 
@@ -152,7 +121,6 @@ std::vector<Order> OrderBook::takeRemaining() {
           "Debe detenerse OrderBook antes de recuperar pedidos");
     }
 
-    // El consumidor debe finalizar primero.
     if (inFlight != 0) {
       throw std::logic_error("Existen pedidos todavia en manos del Dispatcher");
     }
@@ -169,9 +137,6 @@ std::vector<Order> OrderBook::takeRemaining() {
   return remaining;
 }
 
-// =====================================================
-// CONSULTAS SEGURAS
-// =====================================================
 
 std::size_t OrderBook::size() const {
 

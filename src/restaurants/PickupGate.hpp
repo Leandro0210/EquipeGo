@@ -37,9 +37,6 @@ private:
   }
 
 public:
-  // ============================================
-  // PERMISO RAII
-  // ============================================
 
   class Permit {
     friend class PickupGate;
@@ -76,9 +73,6 @@ public:
     }
   };
 
-  // ============================================
-  // CONSTRUCTOR
-  // ============================================
 
   explicit PickupGate(std::size_t pickupSlots) : capacity_(pickupSlots) {
 
@@ -90,9 +84,6 @@ public:
   PickupGate(const PickupGate &) = delete;
   PickupGate &operator=(const PickupGate &) = delete;
 
-  // ============================================
-  // ADQUIRIR CUPO FIFO
-  // ============================================
 
   std::optional<Permit> acquire() {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -127,9 +118,6 @@ public:
     return Permit(this);
   }
 
-  // ============================================
-  // APAGADO
-  // ============================================
 
   void requestStop() {
     {
@@ -140,9 +128,6 @@ public:
     cv_.notify_all();
   }
 
-  // ============================================
-  // CONSULTAS SEGURAS
-  // ============================================
 
   std::size_t occupied() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -167,9 +152,6 @@ public:
                           [this, atLeast] { return waiting_ >= atLeast; });
   }
 
-  // ============================================
-  // NUEVO: ESPERAR HASTA OBSERVAR CUPOS OCUPADOS
-  // ============================================
 
   bool waitForOccupiedCount(std::size_t atLeast,
                             std::chrono::steady_clock::time_point deadline) {

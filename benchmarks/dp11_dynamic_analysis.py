@@ -113,7 +113,6 @@ def configuration(source: Path, dest: Path) -> dict[str, Any]:
     if not isinstance(original, dict):
         raise ValueError("Configuracion JSON invalida")
     config = json.loads(json.dumps(original))
-    # Imagen respecto del JSON original; NO se modifica el mapa ni sus datos.
     image = Path(config["map"]["image"])
     config["map"]["image"] = str((image if image.is_absolute()
                                   else source.parent / image).resolve())
@@ -128,7 +127,6 @@ def configuration(source: Path, dest: Path) -> dict[str, Any]:
 
 
 def environment_for(sanitizer: str) -> dict[str, str]:
-    # No se ocultan ni filtran reportes. El codigo 66 identifica fallos.
     if sanitizer == "tsan":
         return {"TSAN_OPTIONS": "halt_on_error=1:exitcode=66:history_size=7"}
     return {

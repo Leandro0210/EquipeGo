@@ -7,9 +7,6 @@
 #include <string>
 #include <unordered_map>
 
-// DP8.5: copia coherente de contadores publicados mediante JSONL.
-// 'pending' en vivo se calcula como creados - entregados - rechazados:
-// incluye pedidos en cola, asignados o en viaje, no solo OrderBook.
 struct LiveEventStats {
   std::size_t created = 0;
   std::size_t delivered = 0;
@@ -43,6 +40,5 @@ public:
   void logEvent(nlohmann::json eventJson, long long simulatedTimeMs);
   void flush();
 
-  // La interfaz grafica nunca accede directamente al stream ni a los mapas.
   LiveEventStats snapshotStats() const;
 };

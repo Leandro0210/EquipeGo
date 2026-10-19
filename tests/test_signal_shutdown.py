@@ -31,7 +31,6 @@ def verify_case(binary: Path, config: Path, name: str, sig: int) -> None:
         ) as err:
             child = subprocess.Popen(command, stdout=out, stderr=err)
             try:
-                # Nunca se envia una senal antes del mensaje de inicio.
                 start_deadline = time.monotonic() + 15.0
                 while time.monotonic() < start_deadline:
                     if child.poll() is not None:
@@ -47,7 +46,6 @@ def verify_case(binary: Path, config: Path, name: str, sig: int) -> None:
                 else:
                     raise AssertionError(f"{name}: no imprimio la linea de inicio")
 
-                # Tiempo suficiente para que el productor y dispatcher hagan trabajo.
                 time.sleep(0.5)
                 when_sent = time.monotonic()
                 child.send_signal(sig)
@@ -109,7 +107,6 @@ def verify_case(binary: Path, config: Path, name: str, sig: int) -> None:
         assert sum(summary["deliveredPerCourier"].values()) == summary["delivered"]
         assert len(summary["deliveredPerCourier"]) == 8
 
-        # La salida serializada en stdout debe concordar con el JSONL.
         stdout_events = [json.loads(line) for line in lines[1:-1]]
         assert stdout_events == events, f"{name}: stdout y JSONL difieren"
         print(

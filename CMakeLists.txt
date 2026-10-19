@@ -52,9 +52,6 @@ function(configure_equipego_target TARGET_NAME)
     endif()
 endfunction()
 
-# =====================================================
-# SIMULADOR PRINCIPAL DP7 + INTERFAZ DP8.5
-# =====================================================
 
 set(SOURCES
     src/main.cpp
@@ -74,8 +71,6 @@ set(SOURCES
 add_executable(delivery_sim ${SOURCES})
 configure_equipego_target(delivery_sim)
 
-# Binario auxiliar OPCIONAL: no se compila en el build oficial normal.
-# Solo para reproducir ensayos, se activa con -DEQUIPEGO_BUILD_BENCHMARK=ON.
 option(EQUIPEGO_BUILD_BENCHMARK "Build extra diagnostic executable" OFF)
 if(EQUIPEGO_BUILD_BENCHMARK)
     add_executable(delivery_sim_bench ${SOURCES})
@@ -83,9 +78,6 @@ if(EQUIPEGO_BUILD_BENCHMARK)
     target_compile_definitions(delivery_sim_bench PRIVATE EQUIPEGO_BENCHMARK_CLI=1)
 endif()
 
-# =====================================================
-# DP8 - MAPA BASE
-# =====================================================
 
 add_executable(map_preview
     src/visualization/map_preview.cpp
@@ -94,9 +86,6 @@ add_executable(map_preview
 )
 configure_equipego_target(map_preview)
 
-# =====================================================
-# DP8.3 - DEMOSTRACION SIN PEDIDOS (SE CONSERVA)
-# =====================================================
 
 add_executable(live_fleet_preview
     src/visualization/live_fleet_preview.cpp
@@ -109,9 +98,6 @@ add_executable(live_fleet_preview
 )
 configure_equipego_target(live_fleet_preview)
 
-# =====================================================
-# DP8.4 - PEDIDOS REALES, DESPACHO Y FLOTA
-# =====================================================
 
 add_executable(real_orders_preview
     src/visualization/real_orders_preview.cpp
@@ -129,9 +115,6 @@ add_executable(real_orders_preview
 )
 configure_equipego_target(real_orders_preview)
 
-# =====================================================
-# TESTS EXISTENTES
-# =====================================================
 
 enable_testing()
 set(DP_TEST_NAMES)
@@ -215,9 +198,6 @@ add_test(NAME test_live_fleet_preview
 )
 list(APPEND DP_TEST_NAMES test_live_fleet_preview)
 
-# =====================================================
-# DP8.4 - TEST DE INTEGRACION SIN VENTANA
-# =====================================================
 
 add_test(NAME test_real_orders_preview
     COMMAND real_orders_preview
@@ -225,9 +205,6 @@ add_test(NAME test_real_orders_preview
 )
 list(APPEND DP_TEST_NAMES test_real_orders_preview)
 
-# =====================================================
-# DP8.5 - CONTADORES SEGUROS DEL JSONL EN VIVO
-# =====================================================
 
 add_executable(test_live_event_stats
     tests/test_live_event_stats.cpp
@@ -237,7 +214,6 @@ configure_equipego_target(test_live_event_stats)
 add_test(NAME test_live_event_stats COMMAND test_live_event_stats)
 list(APPEND DP_TEST_NAMES test_live_event_stats)
 
-# DP12.4: posicion publicada por Courier, sin reloj visual independiente.
 add_executable(test_dp12_motion
     tests/test_dp12_motion.cpp
     src/core/Logger.cpp

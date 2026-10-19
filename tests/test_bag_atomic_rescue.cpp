@@ -15,9 +15,6 @@
 
 using RealClock = std::chrono::steady_clock;
 
-// =====================================================
-// ESPERA POR NOTIFICACIONES, SIN BUSY WAITING
-// =====================================================
 
 template <typename Predicate>
 bool waitFor(const std::shared_ptr<CapacitySignal> &signal,
@@ -39,9 +36,6 @@ bool waitFor(const std::shared_ptr<CapacitySignal> &signal,
   return predicate();
 }
 
-// Comprobar durante una ventana acotada que el
-// rescatista NO haya movido parte de la bolsa.
-// Solo esperamos mediante condition_variable.
 bool remainsUntransferred(Fleet &fleet,
                           const std::shared_ptr<CapacitySignal> &signal) {
   std::atomic<bool> cancelled{false};
@@ -68,9 +62,6 @@ bool remainsUntransferred(Fleet &fleet,
   return intact();
 }
 
-// =====================================================
-// ENCONTRAR PEDIDOS REPRODUCIBLES
-// =====================================================
 
 std::string findSafeOrder(unsigned int seed, double probability,
                           bool sourceMustBreak, const std::string &excluded) {
@@ -95,9 +86,6 @@ std::string findSafeOrder(unsigned int seed, double probability,
   return "";
 }
 
-// =====================================================
-// TEST PRINCIPAL
-// =====================================================
 
 int main(int argc, char *argv[]) {
 
@@ -134,9 +122,6 @@ int main(int argc, char *argv[]) {
   bool deliveredOk = false;
   bool accountingOk = false;
 
-  // ============================================
-  // CASO 1: CAPACIDAD FRAGMENTADA
-  // ============================================
 
   {
     config.fleet.couriers = 3;
@@ -148,27 +133,22 @@ int main(int argc, char *argv[]) {
     Fleet fleet(config, network, clock);
     fleet.start();
 
-    // B y C tienen un pedido cada una.
     const bool busyB = fleet.at(1).tryAssignOrder(
         Order("busy_b", "r1", "n23", clock.getSimulatedTimeMs()));
 
     const bool busyC = fleet.at(2).tryAssignOrder(
         Order("busy_c", "r1", "n23", clock.getSimulatedTimeMs()));
 
-    // A tiene dos pedidos.
     const bool first = fleet.at(0).tryAssignOrder(
         Order("bag_first", "r3", "n23", clock.getSimulatedTimeMs()));
 
     const bool second = fleet.at(0).tryAssignOrder(
         Order("bag_second", "r3", "n23", clock.getSimulatedTimeMs()));
 
-    // Esperar que A se averie.
     const bool broken = waitFor(fleet.getCapacitySignal(), [&]() {
       return fleet.at(0).getState() == CourierState::Broken;
     });
 
-    // Iniciar rescate DESPUES de ocupar
-    // las bolsas y detectar la averia.
     fleet.startRescue();
 
     const bool noPartial =
@@ -207,9 +187,6 @@ int main(int argc, char *argv[]) {
                    fleet.getRescuedOrderCount() == 0;
   }
 
-  // ============================================
-  // CASO 2: BOLSA COMPLETA RESCATADA
-  // ============================================
 
   {
     config.fleet.couriers = 2;
@@ -244,8 +221,6 @@ int main(int argc, char *argv[]) {
       return fleet.at(0).getState() == CourierState::Broken;
     });
 
-    // La moto c1 esta vacia y tiene
-    // espacio para la bolsa completa.
     fleet.startRescue();
 
     const bool rescued = waitFor(fleet.getCapacitySignal(), [&]() {
@@ -286,9 +261,6 @@ int main(int argc, char *argv[]) {
                   fleet.getRescuedOrderCount() == 2;
   }
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP6 WHOLE BAG RESCUE ===\n";
 

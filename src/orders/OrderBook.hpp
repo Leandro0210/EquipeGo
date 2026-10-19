@@ -23,35 +23,25 @@ private:
 
   bool stopRequested = false;
 
-  // Pedidos extraidos pero todavia no resueltos.
   std::size_t inFlight = 0;
 
-  // Notifica al Dispatcher cuando llega un pedido.
   std::shared_ptr<CapacitySignal> wakeSignal;
 
 public:
   explicit OrderBook(std::size_t maxPending);
 
-  // Vincular el canal de notificaciones.
   void setNotificationSignal(std::shared_ptr<CapacitySignal> signal);
 
-  // Productor: agregar un pedido.
   bool tryAdd(Order &&order);
 
-  // Consumidor: esperar un pedido (bloqueante).
   std::optional<Order> waitAndTake();
 
-  // Consumidor: intentar sacar un pedido sin esperar.
   std::optional<Order> tryTake();
 
-  // Avisar que un pedido extraido ya fue resuelto:
-  // Assigned, Rejected o Pending.
   void completeTaken();
 
-  // Detener el libro.
   void requestStop();
 
-  // Recuperar pedidos al finalizar la simulacion.
   std::vector<Order> takeRemaining();
 
   std::size_t size() const;

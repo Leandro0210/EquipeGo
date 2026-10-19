@@ -62,9 +62,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // =============================================
-  // TEST 1: DURACION REPRODUCIBLE
-  // =============================================
 
   const auto durationA =
       preparationDurationMs(*restaurant, "o17", config.orders.seed);
@@ -82,9 +79,6 @@ int main(int argc, char *argv[]) {
   bool fromCreationOk = false;
   bool shutdownOk = false;
 
-  // =============================================
-  // TEST 2: NO RECOGER ANTES DE TIEMPO
-  // =============================================
 
   {
     restaurant->prepTimeMinMs = 12000;
@@ -122,9 +116,6 @@ int main(int argc, char *argv[]) {
                     results[0].order.getState() == OrderState::Delivered;
   }
 
-  // =============================================
-  // TEST 3: COCINA DESDE LA CREACION
-  // =============================================
 
   {
     restaurant->prepTimeMinMs = 16000;
@@ -136,11 +127,8 @@ int main(int argc, char *argv[]) {
     Fleet fleet(config, network, clock);
     fleet.start();
 
-    // Crear pedido antes de asignarlo.
     const long long createdAt = clock.getSimulatedTimeMs();
 
-    // 900 ms reales = 18000 ms simulados.
-    // La comida ya debe estar preparada.
     std::this_thread::sleep_for(std::chrono::milliseconds(900));
 
     const auto assignmentStart = RealClock::now();
@@ -165,14 +153,8 @@ int main(int argc, char *argv[]) {
                      results[0].order.getState() == OrderState::Delivered;
   }
 
-  // =============================================
-  // TEST 4: APAGADO DURANTE COCINA
-  // =============================================
 
   {
-    // Preparacion de 20 segundos reales.
-    // No debemos esperar todo ese tiempo
-    // para poder apagar la flota.
     restaurant->prepTimeMinMs = 400000;
     restaurant->prepTimeMaxMs = 400000;
 
@@ -208,9 +190,6 @@ int main(int argc, char *argv[]) {
                  results[0].order.getState() == OrderState::Pending;
   }
 
-  // =============================================
-  // RESULTADOS
-  // =============================================
 
   std::cout << "=== TEST DP5 PREPARATION TIME ===\n";
 

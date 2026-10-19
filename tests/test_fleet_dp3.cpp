@@ -19,7 +19,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Prueba con 8 actores independientes.
   config.fleet.couriers = 8;
   config.fleet.bagCapacity = 1;
 
@@ -28,8 +27,6 @@ int main(int argc, char *argv[]) {
 
   RoadNetwork network(config);
 
-  // Usamos el restaurante ubicado en el nodo
-  // inicial de las motos (r3 en nuestro JSON).
   const auto restaurant =
       std::find_if(config.restaurants.begin(), config.restaurants.end(),
                    [&config](const Restaurant &r) {
@@ -56,9 +53,6 @@ int main(int argc, char *argv[]) {
 
   Fleet fleet(config, network, clock);
 
-  // ===========================================
-  // INICIAR OCHO REPARTIDORES
-  // ===========================================
 
   fleet.start();
 
@@ -69,8 +63,6 @@ int main(int argc, char *argv[]) {
 
   const auto start = std::chrono::steady_clock::now();
 
-  // Asignacion manual solo para probar DP.3.
-  // La seleccion automatica sera trabajo de DP.4.
   for (std::size_t i = 0; i < fleet.size(); ++i) {
     const std::string orderId = "dp3_" + std::to_string(i);
 
@@ -82,9 +74,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // ===========================================
-  // ESPERAR ENTREGAS
-  // ===========================================
 
   const auto deadline =
       start + std::chrono::duration<double>(expectedSeconds + 5.0);
@@ -109,7 +98,6 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-    // Espera solo del codigo de prueba.
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 
@@ -117,9 +105,6 @@ int main(int argc, char *argv[]) {
       std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
           .count();
 
-  // ===========================================
-  // APAGADO DE TODA LA FLOTA
-  // ===========================================
 
   fleet.requestStop();
   fleet.join();
@@ -151,9 +136,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // ===========================================
-  // RESULTADOS
-  // ===========================================
 
   std::cout << "\n=== PRUEBA FINAL DP.3 ===\n";
   std::cout << "Repartidores: " << fleet.size() << '\n';

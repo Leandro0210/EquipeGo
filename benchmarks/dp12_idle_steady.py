@@ -41,8 +41,6 @@ def sha256(path: Path) -> str:
 
 
 def proc_cpu_seconds(pid: int, clock_ticks: int) -> float:
-    # /proc/PID/stat: el comm puede tener espacios o ')'. Separar usando
-    # la ULTIMA ')' antes del resto, donde indice 0 es el campo 3 (state).
     raw = Path(f'/proc/{pid}/stat').read_text(encoding='ascii')
     right = raw.rfind(')')
     if right == -1:
@@ -113,7 +111,6 @@ def trial(binary: Path, config: Path, root: Path, couriers: int, mode: str,
             meta['measured_wall_s'] = round(dt, 6)
             meta['measured_cpu_pct_one_core'] = round((after-before)*100/dt, 3)
             meta['startup_excluded'] = True
-            # No apagar nosotros: el proceso debe terminar por durationS.
             try:
                 code = proc.wait(timeout=cooldown+6)
             except subprocess.TimeoutExpired:

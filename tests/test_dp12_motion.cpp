@@ -30,7 +30,7 @@ SimulationConfig makeConfig() {
   c.fleet.startNode = "n0";
   c.fleet.speedKmh = 36.0;
   c.fleet.bagCapacity = 1;
-  c.simulation.timeScale = 60.0; // 1000 m / 10 m/s / 60 = 1.67 s reales
+  c.simulation.timeScale = 60.0; 
   c.incidents.breakdownProbability = 0.0;
   return c;
 }
@@ -117,7 +117,7 @@ void testBreakdownFrozen() {
   courier.requestStop();
   worker.join();
 }
-} // namespace
+} 
 
 int main() {
   try {

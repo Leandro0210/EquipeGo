@@ -96,10 +96,6 @@ int main(int argc, char *argv[]) {
   config.fleet.startNode = "n8";
   config.simulation.timeScale = 120.0;
 
-  // Restaurante inmediato para pedidos del test.
-  // Otro restaurante cocina durante mucho tiempo
-  // para conservar ocupada la moto receptora
-  // en la prueba de capacidad insuficiente.
   for (Restaurant &restaurant : config.restaurants) {
     if (restaurant.id == "r3") {
       restaurant.nodeId = "n8";
@@ -121,9 +117,6 @@ int main(int argc, char *argv[]) {
   bool transferOk = false;
   bool deliveredOk = false;
 
-  // ============================================
-  // TEST 1: CAPACIDAD INSUFICIENTE
-  // ============================================
 
   {
     config.incidents.breakdownProbability = 1.0;
@@ -145,8 +138,6 @@ int main(int argc, char *argv[]) {
 
     const bool broken = waitForBroken(fleet.at(0), fleet.getCapacitySignal());
 
-    // Origen tiene 2 pedidos; destino tiene 1.
-    // bagCapacity = 2. No caben los tres.
     const bool rejected = !fleet.at(0).transferAllTo(fleet.at(1));
 
     const auto first = fleet.at(0).getAssignedOrderState("failed_active");
@@ -180,9 +171,6 @@ int main(int argc, char *argv[]) {
                         ids.size() == 3 && pending == 3;
   }
 
-  // ============================================
-  // TEST 2: TRANSFERENCIA Y ENTREGA EXITOSA
-  // ============================================
 
   {
     config.incidents.breakdownProbability = 0.5;
@@ -255,9 +243,6 @@ int main(int argc, char *argv[]) {
                   ids.size() == 2 && deliveredCount == 2;
   }
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP6 ATOMIC TRANSFER ===\n";
 

@@ -67,17 +67,13 @@ def run_real(binary: Path) -> None:
         counts = collections.Counter(e['event'] for e in events)
         for k, v in [('created','orderCreated'),('delivered','orderDelivered'),('rejected','orderRejected')]:
             assert summary[k] == counts[v]
-        # La marca simulationStopping puede ir algo despues del limite,
-        # debido a la union ordenada de hilos. Los PEDIDOS no deben llegar tarde.
         created = [e['t'] for e in events if e['event'] == 'orderCreated']
         assert created, 'No se observaron pedidos durante 300 segundos simulados'
         latest_creation = max(created)
         limit_ms = duration_sim_s * 1000
-        # Margen de 10 s simulados (=0.167 s reales a 60x) por scheduling WSL.
         assert latest_creation <= limit_ms + 10000, (
             f'Pedidos creados tarde: t={latest_creation}ms > {limit_ms+10000}ms'
         )
-        # No se exige tiempo total exacto al milisegundo por arranque y shutdown.
         assert 4.0 <= elapsed <= 15.0, f'Duracion real anomala: {elapsed:.3f}s'
         print(f'OK DP12.2 runtime: {elapsed:.2f}s reales, '
               f'ultimo pedido t={latest_creation}ms, corte={limit_ms}ms, '

@@ -11,14 +11,9 @@
 
 namespace {
 
-// =====================================================
-// COLORES - OPENCV UTILIZA BGR
-// =====================================================
 
-// Azul: doble circulacion.
 const cv::Scalar kTwoWayBlue(245, 140, 45);
 
-// Rosado: circulacion unica.
 const cv::Scalar kOneWayPink(185, 85, 240);
 
 const cv::Scalar kStreetShadow(38, 38, 38);
@@ -32,9 +27,6 @@ const cv::Scalar kRestaurantText(255, 255, 255);
 constexpr int kNodeRadius = 12;
 constexpr int kRestaurantRadius = 13;
 
-// =====================================================
-// ETIQUETAS CENTRADAS
-// =====================================================
 
 void drawCenteredLabel(
     cv::Mat &image,
@@ -59,9 +51,6 @@ void drawCenteredLabel(
       fontScale, color, 1, cv::LINE_AA);
 }
 
-// =====================================================
-// POSICION DE NODOS
-// =====================================================
 
 cv::Point findNodePosition(
     const SimulationConfig &config,
@@ -79,9 +68,6 @@ cv::Point findNodePosition(
   return config.nodes[it->second].pixelPos;
 }
 
-// =====================================================
-// INTERPOLACION PARA FLECHAS
-// =====================================================
 
 cv::Point interpolate(
     const cv::Point &from,
@@ -95,15 +81,11 @@ cv::Point interpolate(
           from.y + (to.y - from.y) * fraction)));
 }
 
-// =====================================================
-// CALLES DE DOBLE Y UNICO SENTIDO
-// =====================================================
 
 void drawStreets(
     cv::Mat &frame,
     const SimulationConfig &config) {
 
-  // Primera pasada: dibujar las calles.
   for (const Street &street : config.streets) {
 
     const cv::Point from =
@@ -117,18 +99,15 @@ void drawStreets(
             ? kOneWayPink
             : kTwoWayBlue;
 
-    // Contorno oscuro.
     cv::line(
         frame, from, to,
         kStreetShadow, 6, cv::LINE_AA);
 
-    // Color segun el sentido.
     cv::line(
         frame, from, to,
         color, 4, cv::LINE_AA);
   }
 
-  // Segunda pasada: flechas en calles unicas.
   for (const Street &street : config.streets) {
 
     if (!street.oneWay) {
@@ -147,13 +126,11 @@ void drawStreets(
     const cv::Point arrowEnd =
         interpolate(from, to, 0.75);
 
-    // Flecha oscura de contorno.
     cv::arrowedLine(
         frame, arrowStart, arrowEnd,
         kStreetShadow, 5,
         cv::LINE_AA, 0, 0.35);
 
-    // Flecha blanca visible sobre el rosado.
     cv::arrowedLine(
         frame, arrowStart, arrowEnd,
         cv::Scalar(255, 255, 255), 2,
@@ -161,9 +138,6 @@ void drawStreets(
   }
 }
 
-// =====================================================
-// NODOS
-// =====================================================
 
 void drawNodes(
     cv::Mat &frame,
@@ -187,9 +161,6 @@ void drawNodes(
   }
 }
 
-// =====================================================
-// RESTAURANTES
-// =====================================================
 
 void drawRestaurants(
     cv::Mat &frame,
@@ -219,9 +190,6 @@ void drawRestaurants(
   }
 }
 
-// =====================================================
-// LEYENDA
-// =====================================================
 
 void drawLegend(cv::Mat &frame) {
 
@@ -253,7 +221,6 @@ void drawLegend(cv::Mat &frame) {
       cv::FONT_HERSHEY_SIMPLEX,
       0.48, kNodeText, 1, cv::LINE_AA);
 
-  // Doble sentido - azul.
   cv::line(
       frame, cv::Point(20, 49),
       cv::Point(49, 49),
@@ -265,7 +232,6 @@ void drawLegend(cv::Mat &frame) {
       cv::FONT_HERSHEY_SIMPLEX,
       0.39, kNodeText, 1, cv::LINE_AA);
 
-  // Un solo sentido - rosado.
   cv::arrowedLine(
       frame, cv::Point(20, 73),
       cv::Point(49, 73),
@@ -278,7 +244,6 @@ void drawLegend(cv::Mat &frame) {
       cv::FONT_HERSHEY_SIMPLEX,
       0.39, kNodeText, 1, cv::LINE_AA);
 
-  // Nodo blanco.
   cv::circle(
       frame, cv::Point(34, 97),
       9, kNodeFill,
@@ -294,7 +259,6 @@ void drawLegend(cv::Mat &frame) {
       cv::FONT_HERSHEY_SIMPLEX,
       0.39, kNodeText, 1, cv::LINE_AA);
 
-  // Restaurante rojo.
   cv::circle(
       frame, cv::Point(34, 121),
       9, kRestaurantRed,
@@ -307,11 +271,8 @@ void drawLegend(cv::Mat &frame) {
       0.39, kNodeText, 1, cv::LINE_AA);
 }
 
-} // namespace
+} 
 
-// =====================================================
-// CONSTRUCTOR
-// =====================================================
 
 MapViewer::MapViewer(const MapConfig &map)
     : baseImage(map.image.clone()),
@@ -328,17 +289,11 @@ MapViewer::MapViewer(const MapConfig &map)
   }
 }
 
-// =====================================================
-// MAPA ORIGINAL
-// =====================================================
 
 const cv::Mat &MapViewer::background() const noexcept {
   return baseImage;
 }
 
-// =====================================================
-// MAPA CON RED SUPERPUESTA
-// =====================================================
 
 cv::Mat MapViewer::renderNetwork(
     const SimulationConfig &config) const {
@@ -360,9 +315,6 @@ cv::Mat MapViewer::renderNetwork(
   return frame;
 }
 
-// =====================================================
-// VENTANA OPENCV
-// =====================================================
 
 void MapViewer::showFrame(
     const cv::Mat &frame) const {
@@ -433,17 +385,11 @@ void MapViewer::showFrame(
   }
 }
 
-// =====================================================
-// MOSTRAR MAPA ORIGINAL
-// =====================================================
 
 void MapViewer::show() const {
   showFrame(baseImage);
 }
 
-// =====================================================
-// MOSTRAR RED
-// =====================================================
 
 void MapViewer::showNetwork(
     const SimulationConfig &config) const {

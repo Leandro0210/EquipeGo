@@ -59,7 +59,6 @@ int main(int argc, char *argv[]) {
                 break;
             }
 
-            // Polling permitido solamente en este test.
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(10));
         }

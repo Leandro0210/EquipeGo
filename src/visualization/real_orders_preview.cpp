@@ -63,8 +63,6 @@ struct VisualCourier {
   std::string phase;
 };
 
-// Estimacion de dibujo: el nodo real sigue siendo el que informa Courier.
-// La fase se reinicia cada vez que cambia el nodo o el objetivo.
 struct MotionTracker {
   std::string origin;
   std::string target;
@@ -159,7 +157,6 @@ cv::Mat drawFrame(const cv::Mat &networkImage,
   networkImage.copyTo(frame(cv::Rect(0, 0, networkImage.cols,
                                     networkImage.rows)));
 
-  // Resaltar solo la ruta del repartidor seleccionado.
   if (selected < samples.size() && !samples[selected].target.empty()) {
     const auto &chosen = samples[selected];
     const auto route = network.shortestRoute(
@@ -175,7 +172,6 @@ cv::Mat drawFrame(const cv::Mat &networkImage,
     }
   }
 
-  // Desplazar ligeramente marcadores superpuestos, sin modificar posiciones.
   for (std::size_t i = 0; i < samples.size(); ++i) {
     const cv::Point2d actual = samples[i].point;
     std::size_t size = 0, rank = 0;
@@ -243,7 +239,7 @@ void requireDisplay() {
 #endif
 }
 
-} // namespace
+} 
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -281,7 +277,6 @@ int main(int argc, char *argv[]) {
 
   try {
     if (!checkOnly) requireDisplay();
-    // La prueba automatica acelera el reloj para terminar rapidamente.
     config.simulation.timeScale = checkOnly ? 60.0 : chosenScale;
     MapViewer viewer(config.map);
     const cv::Mat networkImage = viewer.renderNetwork(config);

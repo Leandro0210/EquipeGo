@@ -31,13 +31,11 @@ int main(int argc, char *argv[]) {
 
   Dispatcher dispatcher(config, network, fleet);
 
-  // Mover solamente c0 a otra zona.
   if (!fleet.at(0).assignDestination("n23")) {
     std::cerr << "ERROR: no se pudo mover c0\n";
     return 1;
   }
 
-  // Esperar a que c0 complete el desplazamiento.
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(15);
 
@@ -58,7 +56,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // r3 esta en n8, el nodo inicial de c1 a c7.
   Order firstOrder("dp4_best_1", "r3", "n23", clock.getSimulatedTimeMs());
 
   const auto first = dispatcher.assignBestCourier(firstOrder);
@@ -66,8 +63,6 @@ int main(int argc, char *argv[]) {
   std::cout << "=== TEST SELECCION DISPATCHER ===\n";
   std::cout << "Primera moto elegida: " << first.value_or("ninguna") << '\n';
 
-  // Con c1 ocupada y capacidad 1,
-  // la siguiente moto esperada es c2.
   Order secondOrder("dp4_best_2", "r3", "n23", clock.getSimulatedTimeMs());
 
   const auto second = dispatcher.assignBestCourier(secondOrder);
@@ -76,7 +71,6 @@ int main(int argc, char *argv[]) {
 
   bool correct = first && *first == "c1" && second && *second == "c2";
 
-  // Esperar a que ambas entreguen sus pedidos.
   const auto deliveryDeadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(15);
 

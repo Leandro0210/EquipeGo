@@ -25,7 +25,6 @@ class EventLogger;
 
 enum class CourierState { Idle, Moving, Broken };
 
-// DP8.4: solo valores copiados; no exponemos los pedidos mutables.
 struct CourierOrderSnapshot {
   std::string orderId;
   std::string restauranteId;
@@ -33,12 +32,10 @@ struct CourierOrderSnapshot {
   OrderState state = OrderState::Created;
 };
 
-// Progreso sobre el segmento que el hilo del repartidor esta recorriendo.
-// Se publica como copia; la GUI nunca accede a datos mutables de Courier.
 struct CourierMotionSnapshot {
   std::string from;
   std::string to;
-  double progress = 0.0;  // fraccion [0, 1] del segmento real
+  double progress = 0.0;  
 };
 
 struct CourierSnapshot {
@@ -62,8 +59,6 @@ private:
   std::shared_ptr<CapacitySignal> capacitySignal;
   std::shared_ptr<RestaurantManager> restaurantManager;
 
-  // DP7: referencia no propietaria al logger.
-  // El logger debe vivir mas que el repartidor.
   EventLogger *eventLogger = nullptr;
 
   mutable std::mutex stateMutex;
@@ -73,7 +68,6 @@ private:
   CourierState state = CourierState::Idle;
   bool everBroken = false;
 
-  // Exclusivamente bajo stateMutex: misma fuente de verdad para simulacion y GUI.
   struct MotionInterval {
     std::string from;
     std::string to;
@@ -131,9 +125,6 @@ public:
   CourierState getState() const;
   bool hasBrokenDown() const;
 
-  // DP8.4: leer identificador, nodo, fase y pedidos bajo UN mutex.
-  // Evita mezclar informacion de instantes diferentes dentro
-  // de la misma moto y nunca devuelve referencias a Order.
   CourierSnapshot getSnapshot() const {
     std::lock_guard<std::mutex> lock(stateMutex);
 

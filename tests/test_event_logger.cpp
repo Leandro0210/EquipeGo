@@ -13,9 +13,6 @@
 #include <unordered_map>
 #include <vector>
 
-// =====================================================
-// TEST DP7.1 - EVENT LOGGER
-// =====================================================
 
 int main() {
 
@@ -38,16 +35,10 @@ int main() {
   bool monotonicOk = true;
   bool countsOk = false;
 
-  // =========================================
-  // 1. CREAR LOGGER
-  // =========================================
 
   {
     EventLogger logger(filePath);
 
-    // =====================================
-    // 2. VALIDAR LINEA DE INICIO
-    // =====================================
 
     std::ostringstream captured;
 
@@ -59,9 +50,6 @@ int main() {
 
     startOk = captured.str() == "Simulation has started...\n";
 
-    // =====================================
-    // 3. PROBAR EVENTOS INVALIDOS
-    // =====================================
 
     bool invalidObject = false;
     bool invalidName = false;
@@ -95,9 +83,6 @@ int main() {
     invalidEventsRejected =
         invalidObject && invalidName && invalidTime && invalidOrder;
 
-    // =====================================
-    // 4. GENERAR EVENTOS EN PARALELO
-    // =====================================
 
     std::vector<std::thread> workers;
 
@@ -126,31 +111,20 @@ int main() {
       worker.join();
     }
 
-    // =====================================
-    // 5. COMPROBAR TIEMPO NO DECRECIENTE
-    // =====================================
 
     logger.logEvent({{"event", "orderCreated"},
                      {"order", "timeline"},
                      {"restaurant", "r3"}},
                     100);
 
-    // Simulamos un evento que llega tarde.
-    // El archivo debe conservar t >= 100.
     logger.logEvent(
         {{"event", "orderAssigned"}, {"order", "timeline"}, {"courier", "c0"}},
         60);
 
-    // Evento sin pedido.
     logger.logEvent({{"event", "courierBreakdown"}, {"courier", "c4"}}, 155);
   }
 
-  // El logger ya cerro el archivo.
-  // Ahora podemos leerlo sin concurrencia.
 
-  // =========================================
-  // 6. REVISAR TODO EL ARCHIVO
-  // =========================================
 
   std::ifstream input(filePath);
 
@@ -178,13 +152,11 @@ int main() {
     try {
       const nlohmann::json event = nlohmann::json::parse(line);
 
-      // Cada linea tiene que ser un objeto.
       if (!event.is_object()) {
         structureOk = false;
         continue;
       }
 
-      // Campos obligatorios.
       if (!event.contains("t") || !event["t"].is_number_integer() ||
           !event.contains("event") || !event["event"].is_string()) {
 
@@ -198,7 +170,6 @@ int main() {
         structureOk = false;
       }
 
-      // Comprobar tiempos por pedido.
       if (event.contains("order")) {
 
         if (!event["order"].is_string()) {
@@ -231,8 +202,6 @@ int main() {
     }
   }
 
-  // Seis hilos, 200 eventos cada uno,
-  // mas los tres eventos de validacion.
   const std::size_t expectedCount = kThreads * kEventsPerThread + 3;
 
   countsOk = totalLines == expectedCount && timelineEvents == 2;
@@ -241,9 +210,6 @@ int main() {
 
   std::remove(filePath.c_str());
 
-  // =========================================
-  // 7. MOSTRAR RESULTADOS
-  // =========================================
 
   std::cout << "=== TEST DP7 EVENT LOGGER ===\n";
 

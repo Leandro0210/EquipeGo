@@ -50,7 +50,6 @@ void EventLogger::logEvent(nlohmann::json eventJson,
     hasOrder = true;
   }
 
-  // Actualizar evento y metricas con el mismo mutex.
   std::lock_guard<std::mutex> lock(logMutex);
 
   long long eventTime = simulatedTimeMs;
@@ -64,8 +63,6 @@ void EventLogger::logEvent(nlohmann::json eventJson,
   eventJson["t"] = eventTime;
   const std::string serialized = eventJson.dump();
 
-  // Mantener contrato DP7: JSONL al archivo y a stdout.
-  // No lanzar excepcion por I/O dentro de los hilos trabajadores.
   fileStream << serialized << '\n';
   if (emitToStdout) {
     std::cout << serialized << '\n' << std::flush;

@@ -19,9 +19,6 @@
 
 using RealClock = std::chrono::steady_clock;
 
-// =====================================================
-// ESPERA CON CONDITION VARIABLE
-// =====================================================
 
 template <typename Predicate>
 bool waitFor(const std::shared_ptr<CapacitySignal> &signal,
@@ -45,9 +42,6 @@ bool waitFor(const std::shared_ptr<CapacitySignal> &signal,
   return predicate();
 }
 
-// =====================================================
-// ENCONTRAR PEDIDO CON AVERIA REPRODUCIBLE
-// =====================================================
 
 std::string findRescueOrder(unsigned int seed) {
 
@@ -71,9 +65,6 @@ std::string findRescueOrder(unsigned int seed) {
   return "";
 }
 
-// =====================================================
-// LEER EVENTOS JSONL
-// =====================================================
 
 std::vector<nlohmann::json> readEvents(const std::filesystem::path &path) {
 
@@ -92,9 +83,6 @@ std::vector<nlohmann::json> readEvents(const std::filesystem::path &path) {
   return events;
 }
 
-// =====================================================
-// CONTAR EVENTOS
-// =====================================================
 
 std::size_t countEvent(const std::vector<nlohmann::json> &events,
                        const std::string &name) {
@@ -110,9 +98,6 @@ std::size_t countEvent(const std::vector<nlohmann::json> &events,
   return total;
 }
 
-// =====================================================
-// CASO 1: AVERIA, RESCATE Y ENTREGA
-// =====================================================
 
 bool testSuccessfulRescue(SimulationConfig config,
                           const std::filesystem::path &logPath) {
@@ -202,9 +187,6 @@ bool testSuccessfulRescue(SimulationConfig config,
 
   const auto events = readEvents(logPath);
 
-  // =========================================
-  // VERIFICAR EVENTOS DE AVERIA Y REASIGNACION
-  // =========================================
 
   bool fieldsOk = false;
   bool correctOrder = false;
@@ -257,9 +239,6 @@ bool testSuccessfulRescue(SimulationConfig config,
          countsOk;
 }
 
-// =====================================================
-// CASO 2: DOS AVERIAS SIN RESCATE POSIBLE
-// =====================================================
 
 bool testSimultaneousBreakdowns(SimulationConfig config,
                                 const std::filesystem::path &logPath) {
@@ -379,9 +358,6 @@ bool testSimultaneousBreakdowns(SimulationConfig config,
   return acceptedA && acceptedB && bothBroken && noDeadlock && countsOk;
 }
 
-// =====================================================
-// MAIN DEL TEST
-// =====================================================
 
 int main(int argc, char *argv[]) {
 

@@ -12,8 +12,6 @@
 #include <string>
 #include <vector>
 
-// DP8.5: visor del MISMO Fleet, Dispatcher y Logger usados por delivery_sim.
-// Toda operacion HighGUI se ejecuta desde el hilo de main.
 class SimulationDashboard {
 private:
   struct VisualCourier {
@@ -46,7 +44,6 @@ public:
   SimulationDashboard &operator=(const SimulationDashboard &) = delete;
 
   void open();
-  // Devuelve false cuando el usuario pide finalizar (Q, ESC, cerrar ventana).
   bool frame(Fleet &fleet, const LiveEventStats &stats, long long elapsedMs);
   void close() noexcept;
 };

@@ -9,13 +9,11 @@ private:
       std::chrono::steady_clock::now();
 
 public:
-  // Inicia o reinicia el reloj de simulación.
   void start(double scale) {
     timeScale = scale;
     startTime = std::chrono::steady_clock::now();
   }
 
-  // Devuelve los milisegundos transcurridos en tiempo simulado.
   long long getSimulatedTimeMs() const {
     const auto ahora = std::chrono::steady_clock::now();
 

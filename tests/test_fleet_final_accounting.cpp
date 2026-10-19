@@ -25,8 +25,6 @@ int main(int argc, char *argv[]) {
   config.fleet.speedKmh = 1.0;
   config.simulation.timeScale = 1.0;
 
-  // Este test evalua contabilidad final.
-  // Evitar que dependa de la cocina.
   for (Restaurant &restaurant : config.restaurants) {
     if (restaurant.id == "r3") {
       restaurant.prepTimeMinMs = 0;

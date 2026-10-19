@@ -7,9 +7,6 @@
 #include <exception>
 #include <iostream>
 
-// =====================================================
-// DP8.2 - TEST DEL MAPA Y DE LA RED DIBUJADA
-// =====================================================
 
 int main(int argc, char *argv[]) {
 
@@ -35,9 +32,6 @@ int main(int argc, char *argv[]) {
     const cv::Mat &original = config.map.image;
     const cv::Mat &background = viewer.background();
 
-    // =========================================
-    // 1. VERIFICAR IMAGEN ORIGINAL
-    // =========================================
 
     loaded = !original.empty() && !background.empty();
 
@@ -50,9 +44,6 @@ int main(int argc, char *argv[]) {
 
     independentCopy = original.data != background.data;
 
-    // =========================================
-    // 2. VERIFICAR RED DIBUJADA
-    // =========================================
 
     const cv::Mat network = viewer.renderNetwork(config);
 
@@ -62,17 +53,11 @@ int main(int argc, char *argv[]) {
                        network.type() == original.type() &&
                        cv::norm(background, network, cv::NORM_INF) > 0.0;
 
-    // =========================================
-    // 3. VERIFICAR RENDER REPRODUCIBLE
-    // =========================================
 
     const cv::Mat secondRender = viewer.renderNetwork(config);
 
     deterministic = cv::norm(network, secondRender, cv::NORM_INF) == 0.0;
 
-    // =========================================
-    // 4. VERIFICAR TOPOLOGIA
-    // =========================================
 
     for (const Street &street : config.streets) {
 
@@ -94,9 +79,6 @@ int main(int argc, char *argv[]) {
     topologyOk = topologyOk && !config.nodes.empty() &&
                  !config.streets.empty() && !config.restaurants.empty();
 
-    // =========================================
-    // 5. VERIFICAR QUE EL MAPA SIGUE INTACTO
-    // =========================================
 
     originalIdentical =
         originalIdentical &&
@@ -109,9 +91,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // =========================================
-  // 6. MOSTRAR RESULTADOS
-  // =========================================
 
   std::cout << "=== TEST DP8.2 MAP NETWORK ===\n";
 

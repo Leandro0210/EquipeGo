@@ -19,8 +19,6 @@ constexpr double kPi = 3.14159265358979323846;
 
 double degToRad(double deg) { return deg * (kPi / 180.0); }
 
-// Calcula la distancia real en metros entre dos coordenadas (fórmula de
-// Haversine)
 double calculateDistanceMeters(double lat1, double lon1, double lat2,
                                double lon2) {
   const double dLat = degToRad(lat2 - lat1);
@@ -93,7 +91,7 @@ bool requireArray(const json &parent, const std::string &key,
   return true;
 }
 
-} // namespace
+} 
 
 cv::Point latLonToPixel(double lat, double lon, const MapBounds &bounds,
                         int width, int height) {
@@ -108,7 +106,6 @@ cv::Point latLonToPixel(double lat, double lon, const MapBounds &bounds,
 
 bool loadAndValidateConfig(int argc, char *argv[],
                            SimulationConfig &outConfig) {
-  // 1. Validar argumentos de línea de comandos (Sección 5)
   if (argc < 2) {
     std::cerr << "Usage: " << (argc > 0 ? argv[0] : "delivery_sim")
               << " <config.json> [--log <path>]\n";
@@ -130,7 +127,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     outConfig.logFilePath = argv[3];
   }
 
-  // 2. Abrir y parsear el archivo JSON
   std::ifstream file(configFilePath);
   if (!file.is_open()) {
     std::cerr << "Error: cannot open configuration file '" << configFilePath
@@ -152,7 +148,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     return false;
   }
 
-  // 3. Validar sección "map"
   if (!requireObject(root, "map", "root"))
     return false;
   const json &jMap = root["map"];
@@ -185,7 +180,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     return false;
   }
 
-  // Resolver la ruta de la imagen relativa al archivo de configuración
   const fs::path cfgPath(configFilePath);
   const fs::path baseDir =
       cfgPath.has_parent_path() ? cfgPath.parent_path() : fs::current_path();
@@ -203,7 +197,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
   const int imgWidth = outConfig.map.image.cols;
   const int imgHeight = outConfig.map.image.rows;
 
-  // 4. Validar sección "nodes" (al menos uno)
   if (!requireArray(root, "nodes", "root"))
     return false;
   const json &jNodes = root["nodes"];
@@ -244,7 +237,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     outConfig.nodes.push_back(n);
   }
 
-  // 5. Validar sección "streets" y referencias a nodos existentes
   if (!requireArray(root, "streets", "root"))
     return false;
   const json &jStreets = root["streets"];
@@ -305,7 +297,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     outConfig.streets.push_back(s);
   }
 
-  // 6. Validar sección "restaurants" y referencias a nodos existentes
   if (!requireArray(root, "restaurants", "root"))
     return false;
   const json &jRestaurants = root["restaurants"];
@@ -372,7 +363,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     outConfig.restaurants.push_back(r);
   }
 
-  // 7. Validar sección "fleet"
   if (!requireObject(root, "fleet", "root"))
     return false;
   const json &jFleet = root["fleet"];
@@ -400,7 +390,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     return false;
   }
 
-  // 8. Validar sección "orders"
   if (!requireObject(root, "orders", "root"))
     return false;
   const json &jOrders = root["orders"];
@@ -422,7 +411,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     return false;
   }
 
-  // 9. Validar sección "dispatch"
   if (!requireObject(root, "dispatch", "root"))
     return false;
   const json &jDispatch = root["dispatch"];
@@ -439,7 +427,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     return false;
   }
 
-  // 10. Validar sección "incidents"
   if (!requireObject(root, "incidents", "root"))
     return false;
   const json &jIncidents = root["incidents"];
@@ -455,7 +442,6 @@ bool loadAndValidateConfig(int argc, char *argv[],
     return false;
   }
 
-  // 11. Validar sección "simulation"
   if (!requireObject(root, "simulation", "root"))
     return false;
   const json &jSim = root["simulation"];

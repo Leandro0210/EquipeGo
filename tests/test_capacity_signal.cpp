@@ -39,9 +39,6 @@ int main(int argc, char *argv[]) {
 
   fleet.start();
 
-  // ---------------------------------------------
-  // COMPROBAR QUE NO HAYA NOTIFICACION ESPURIA
-  // ---------------------------------------------
 
   const auto initialVersion = signal->version();
 
@@ -58,9 +55,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // ---------------------------------------------
-  // ASIGNAR UN PEDIDO REAL
-  // ---------------------------------------------
 
   Order order("dp4_signal_1", "r3", "n23", clock.getSimulatedTimeMs());
 
@@ -75,9 +69,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // ---------------------------------------------
-  // ESPERAR NOTIFICACION DE ENTREGA
-  // ---------------------------------------------
 
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(10);

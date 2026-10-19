@@ -8,14 +8,12 @@
 #include <unordered_map>
 #include <vector>
 
-// Representa una calle dentro de una ruta.
 struct RouteSegment {
   std::string from;
   std::string to;
   double distanceMeters = 0.0;
 };
 
-// Representa una ruta completa.
 struct Route {
   std::vector<std::string> nodes;
   std::vector<RouteSegment> segments;
@@ -36,7 +34,6 @@ public:
 
   bool isReachable(const std::string &from, const std::string &to) const;
 
-  // Dijkstra: busca la ruta de menor distancia.
   std::optional<Route> shortestRoute(const std::string &from,
                                      const std::string &to) const;
 };

@@ -12,9 +12,6 @@
 
 using RealClock = std::chrono::steady_clock;
 
-// =============================================
-// ESPERAR LAS DOS ENTREGAS SIN BUSY WAITING
-// =============================================
 
 bool waitForDeliveries(Fleet &fleet) {
   auto signal = fleet.getCapacitySignal();
@@ -40,9 +37,6 @@ bool waitForDeliveries(Fleet &fleet) {
   return false;
 }
 
-// =============================================
-// MAIN
-// =============================================
 
 int main(int argc, char *argv[]) {
   SimulationConfig config;
@@ -78,13 +72,8 @@ int main(int argc, char *argv[]) {
   bool shutdownOk = false;
   bool deliveriesOk = false;
 
-  // =============================================
-  // TEST 1: OCUPACION Y APAGADO
-  // =============================================
 
   {
-    // El handoff de 2000 ms simulados
-    // durara 2 segundos reales.
     config.simulation.timeScale = 1.0;
 
     SimulationClock clock;
@@ -99,7 +88,6 @@ int main(int argc, char *argv[]) {
     const bool acceptedA = fleet.at(0).tryAssignOrder(
         Order("handoff_stop_a", "r3", "n8", clock.getSimulatedTimeMs()));
 
-    // Esperar hasta que la moto ocupe el cupo.
     const bool occupied = gate->waitForOccupiedCount(
         1, RealClock::now() + std::chrono::seconds(3));
 
@@ -108,7 +96,6 @@ int main(int argc, char *argv[]) {
     occupationOk = acceptedA && occupied && gate->occupied() == 1 && stateA &&
                    *stateA == OrderState::Assigned;
 
-    // Segunda moto compite por el unico cupo.
     const bool acceptedB = fleet.at(1).tryAssignOrder(
         Order("handoff_stop_b", "r3", "n8", clock.getSimulatedTimeMs()));
 
@@ -121,8 +108,6 @@ int main(int argc, char *argv[]) {
               gate->peakUsage() == 1 && stateB &&
               *stateB == OrderState::Assigned;
 
-    // Interrumpir mientras una moto recoge
-    // y otra espera su turno.
     const auto stopStart = RealClock::now();
 
     fleet.requestStop();
@@ -147,12 +132,8 @@ int main(int argc, char *argv[]) {
                  gate->occupied() == 0 && gate->waitingCount() == 0;
   }
 
-  // =============================================
-  // TEST 2: DOS ENTREGAS NORMALES
-  // =============================================
 
   {
-    // Handoff de unos 33 ms reales.
     config.simulation.timeScale = 60.0;
 
     SimulationClock clock;
@@ -190,9 +171,6 @@ int main(int argc, char *argv[]) {
                    gate->occupied() == 0;
   }
 
-  // =============================================
-  // RESULTADOS
-  // =============================================
 
   std::cout << "=== TEST DP5 PICKUP HANDOFF ===\n";
 

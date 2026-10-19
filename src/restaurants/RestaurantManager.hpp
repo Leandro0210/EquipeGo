@@ -11,8 +11,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Un solo administrador compartido por toda la flota.
-// Cada restaurante tiene su propio PickupGate.
 class RestaurantManager {
 private:
   std::unordered_map<std::string, std::shared_ptr<PickupGate>> gates;
@@ -34,8 +32,6 @@ public:
   RestaurantManager(const RestaurantManager &) = delete;
   RestaurantManager &operator=(const RestaurantManager &) = delete;
 
-  // Devuelve el MISMO gate para todas las motos
-  // que soliciten un mismo restaurante.
   std::shared_ptr<PickupGate> gateFor(const std::string &restaurantId) const {
     const auto it = gates.find(restaurantId);
 
@@ -48,7 +44,6 @@ public:
 
   std::size_t size() const noexcept { return gates.size(); }
 
-  // Despertar a todos los repartidores en fila.
   void requestStop() {
     for (const auto &entry : gates) {
       entry.second->requestStop();

@@ -24,7 +24,6 @@ cv::Scalar colorFor(std::size_t i) {
   return kColors[i % kColors.size()];
 }
 
-// BGR. El color interior refleja el estado, no la identidad.
 cv::Scalar stateColor(const CourierSnapshot &s) {
   if (s.state == CourierState::Broken) return {40, 40, 215};
   if (s.active && s.active->state == OrderState::PickedUp)
@@ -41,7 +40,7 @@ void drawText(cv::Mat &image, const std::string &text, int x, int y,
               scale, color, 1, cv::LINE_AA);
 }
 
-} // namespace
+} 
 
 SimulationDashboard::SimulationDashboard(const SimulationConfig &cfg,
                                          const RoadNetwork &net)
@@ -109,8 +108,6 @@ SimulationDashboard::takeSamples(Fleet &fleet) {
       item.phase = "Disponible";
     }
 
-    // Nunca usamos un cronometro del visor: el progreso procede del hilo
-    // Courier y del mismo segmento dirigido recorrido en travelTo().
     item.point = nodePoint(s.currentNode);
     if (s.motion) {
       const cv::Point2d from = nodePoint(s.motion->from);
@@ -130,7 +127,6 @@ cv::Mat SimulationDashboard::drawFrame(
                 cv::Scalar(246, 246, 246));
   base.copyTo(frame(cv::Rect(0, 0, base.cols, base.rows)));
 
-  // Destacar ruta REAL de la moto seleccionada, respetando oneWay.
   if (selected < samples.size() && !samples[selected].target.empty()) {
     const auto &chosen = samples[selected];
     const auto route = network.shortestRoute(chosen.courier.currentNode,
@@ -146,8 +142,6 @@ cv::Mat SimulationDashboard::drawFrame(
     }
   }
 
-  // Cada pedido ACTIVO muestra su destino de entrega sobre el mapa.
-  // La marca esta fija en un nodo real, incluso antes del pickup.
   for (std::size_t i = 0; i < samples.size(); ++i) {
     const auto &s = samples[i].courier;
     if (!s.active) continue;
@@ -163,8 +157,6 @@ cv::Mat SimulationDashboard::drawFrame(
     }
   }
 
-  // Centro REAL: desplazar un punto para separar motos lo sacaria
-  // artificialmente de la calle. Dibujamos todas en su posicion autentica.
   for (std::size_t i = 0; i < samples.size(); ++i) {
     const cv::Point2d actual = samples[i].point;
     const cv::Point center(cvRound(actual.x), cvRound(actual.y));
@@ -225,11 +217,6 @@ cv::Mat SimulationDashboard::drawFrame(
   drawText(frame, "G=libre N=recoge V=entrega R=averia D=destino",
            x, 143, 0.32);
 
-  // DP12.1: licencia OpenStreetMap: atribucion VISIBLE en cada cuadro.
-  // cv::putText utiliza Hershey, que no interpreta el simbolo UTF-8 (c).
-  // Si la configuracion contiene el signo de copyright, dibujamos
-  // explicitamente su glifo (C encerrada en un circulo), seguido del
-  // resto del texto original. No dependemos del nombre del proveedor.
   std::string attributionText = config.map.attribution;
   const std::string copyrightUtf8 = "\xC2\xA9";
   const auto copyrightPosition = attributionText.find(copyrightUtf8);

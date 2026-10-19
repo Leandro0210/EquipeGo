@@ -15,18 +15,18 @@ struct MapBounds {
 };
 
 struct MapConfig {
-  std::string imagePath;    // Ruta original en el JSON
-  std::string resolvedPath; // Ruta resuelta relativa al archivo JSON
+  std::string imagePath;    
+  std::string resolvedPath; 
   std::string attribution;
   MapBounds bounds;
-  cv::Mat image; // Imagen cargada en memoria con OpenCV
+  cv::Mat image; 
 };
 
 struct Node {
   std::string id;
   double lat = 0.0;
   double lon = 0.0;
-  cv::Point pixelPos{0, 0}; // Posición (x, y) calculada sobre la imagen
+  cv::Point pixelPos{0, 0}; 
 };
 
 struct Street {
@@ -34,7 +34,7 @@ struct Street {
   std::string from;
   std::string to;
   bool oneWay = false;
-  double lengthMeters = 0.0; // Distancia física real entre ambos nodos
+  double lengthMeters = 0.0; 
 };
 
 struct Restaurant {
@@ -88,14 +88,9 @@ struct SimulationConfig {
   std::string logFilePath = "events.log";
 };
 
-// Convierte (lat, lon) a coordenadas de píxel (x, y) según los bounds y el
-// tamaño de la imagen
 cv::Point latLonToPixel(double lat, double lon, const MapBounds &bounds,
                         int width, int height);
 
-// Analiza los argumentos de línea de comandos y carga/valida la configuración
-// JSON. Si algo es inválido, escribe un mensaje legible en std::cerr y devuelve
-// false.
 bool loadAndValidateConfig(int argc, char *argv[], SimulationConfig &outConfig);
 
-#endif // CONFIG_HPP
+#endif 

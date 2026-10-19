@@ -16,9 +16,6 @@ int main() {
 
   constexpr unsigned int seed = 42;
 
-  // ============================================
-  // TEST 1: PROBABILIDADES EXTREMAS
-  // ============================================
 
   for (int i = 0; i < 100; ++i) {
     const std::string orderId = "order_" + std::to_string(i);
@@ -34,9 +31,6 @@ int main() {
     }
   }
 
-  // ============================================
-  // TEST 2: REPRODUCIBILIDAD
-  // ============================================
 
   const auto first =
       incidents::makeBreakdownPlan(seed, "c3", "order_17", "toRestaurant", 0.5);
@@ -47,9 +41,6 @@ int main() {
   deterministicOk =
       first.occurs == second.occurs && first.atFraction == second.atFraction;
 
-  // ============================================
-  // TEST 3: POSICION VALIDA Y VARIACION
-  // ============================================
 
   int breakdowns = 0;
 
@@ -66,12 +57,8 @@ int main() {
     }
   }
 
-  // No deben ocurrir todas ni ninguna.
   variationOk = breakdowns > 0 && breakdowns < 1000;
 
-  // ============================================
-  // TEST 4: CONSULTAS CONCURRENTES
-  // ============================================
 
   std::atomic<int> errors{0};
   std::vector<std::thread> threads;
@@ -96,9 +83,6 @@ int main() {
 
   concurrencyOk = errors.load() == 0;
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP6 BREAKDOWN POLICY ===\n";
 

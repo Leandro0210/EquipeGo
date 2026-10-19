@@ -55,13 +55,10 @@ int main(int argc, char *argv[]) {
 
     fleet.start();
 
-    // Primer pedido: el calculador artificial
-    // no podra obtener una ETA.
     const long long creationTime = clock.getSimulatedTimeMs();
 
     Order blockedOrder(blockedId, "r3", "n23", creationTime);
 
-    // Segundo pedido: ETA valida.
     Order goodOrder(goodId, "r3", "n8", creationTime);
 
     if (!book.tryAdd(std::move(blockedOrder)) ||
@@ -74,7 +71,6 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
-    // Verificar que la cola tiene un limite.
     if (!book.full()) {
       fleet.requestStop();
       fleet.join();
@@ -96,11 +92,6 @@ int main(int argc, char *argv[]) {
 
     std::thread dispatcherThread([&] { dispatcher.run(book, logger, clock); });
 
-    // Tiempo suficiente para que:
-    // - el segundo pedido se asigne
-    // - el primero venza a los 400 ms
-    //
-    // La pausa solo pertenece al test.
     std::this_thread::sleep_for(std::chrono::milliseconds(700));
 
     dispatcher.requestStop(book);
@@ -115,9 +106,6 @@ int main(int argc, char *argv[]) {
     fleet.join();
   }
 
-  // =================================================
-  // LEER RESULTADOS DEL LOG
-  // =================================================
 
   std::ifstream file(logPath);
 

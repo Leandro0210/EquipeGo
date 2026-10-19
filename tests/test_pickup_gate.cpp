@@ -15,14 +15,10 @@ int main() {
   bool capacityOk = false;
   bool shutdownOk = false;
 
-  // ============================================
-  // TEST 1: ORDEN FIFO
-  // ============================================
 
   {
     PickupGate gate(1);
 
-    // Ocupar el unico cupo.
     auto first = gate.acquire();
 
     std::mutex resultMutex;
@@ -57,9 +53,6 @@ int main() {
              gate.peakUsage() == 1 && gate.occupied() == 0;
   }
 
-  // ============================================
-  // TEST 2: CAPACIDAD Y APAGADO
-  // ============================================
 
   {
     PickupGate gate(2);
@@ -100,9 +93,6 @@ int main() {
                  gate.waitingCount() == 0 && !gate.acquire().has_value();
   }
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP5 PICKUP SLOTS ===\n";
 

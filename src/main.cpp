@@ -38,9 +38,6 @@
 #define EQUIPEGO_HAS_POSIX_SIGNALS 0
 #endif
 
-// =====================================================
-// DP7.3 - ESTADISTICAS DESDE EL REGISTRO REAL
-// =====================================================
 
 struct EventAudit {
   std::size_t created = 0;
@@ -54,9 +51,6 @@ struct EventAudit {
   std::unordered_map<std::string, std::size_t> deliveredPerCourier;
 };
 
-// =====================================================
-// AUDITORIA ORIGINAL DP7 (SIN CAMBIAR EL CONTRATO)
-// =====================================================
 
 EventAudit auditEventLog(const std::string &filename,
                          const std::vector<std::string> &courierIds) {
@@ -193,9 +187,6 @@ EventAudit auditEventLog(const std::string &filename,
   return audit;
 }
 
-// =====================================================
-// DP8.5: OPCIONES DEL SIMULADOR
-// =====================================================
 
 namespace {
 
@@ -280,16 +271,7 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
   return true;
 }
 
-// =====================================================
-// DP9.1: SENAL ASINCRONA Y ESPERA SIN BUSY WAIT
-//
-// El manejador de senal NO adquiere mutex, no usa iostream,
-// no interactua con OpenCV y no detiene directamente hilos.
-// Solo marca un atomic<bool> lock-free y escribe en un pipe no bloqueante
-// (write es async-signal-safe en POSIX).
-// =====================================================
 
-// Operaciones lock-free: legales dentro de un handler y sin carrera entre hilos.
 static_assert(std::atomic<bool>::is_always_lock_free,
               "El indicador de apagado debe ser lock-free");
 std::atomic<bool> gSignalStopRequested{false};
@@ -304,7 +286,7 @@ extern "C" void handleStopSignal(int) noexcept {
   if (descriptor >= 0) {
     const unsigned char wake = 1;
     const ssize_t ignored = ::write(descriptor, &wake, sizeof(wake));
-    (void)ignored; // Con pipe lleno ya hay datos suficientes para despertar poll.
+    (void)ignored; 
   }
   errno = originalErrno;
 }
@@ -373,9 +355,6 @@ public:
 
   bool stopRequested() const noexcept { return gSignalStopRequested.load(std::memory_order_relaxed); }
 
-  // La espera headless no necesita sondeo ni sleep_for repetitivo.
-  // poll() se despierta inmediatamente con SIGINT/SIGTERM, y
-  // el timeout restante controla la finalizacion por duracion.
   void waitUntil(std::chrono::steady_clock::time_point deadline) const {
 #if EQUIPEGO_HAS_POSIX_SIGNALS
     while (!stopRequested()) {
@@ -386,7 +365,6 @@ public:
         const auto remaining =
             std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)
                 .count();
-        // +1 evita despertar antes del deadline por redondeo.
         timeoutMs = static_cast<int>(remaining >= INT_MAX - 1
                                          ? INT_MAX
                                          : remaining + 1);
@@ -403,8 +381,6 @@ public:
       }
     }
 #else
-    // En sistemas no POSIX, se usa una espera acotada para poder
-    // observar std::signal. Las evaluaciones del proyecto son POSIX.
     while (!stopRequested() &&
            std::chrono::steady_clock::now() < deadline) {
       const auto next = std::min(deadline, std::chrono::steady_clock::now() +
@@ -436,24 +412,18 @@ private:
 #endif
 };
 
-} // namespace
+} 
 
-// =====================================================
-// MAIN - EQUIPEGO + OPEN CV REAL
-// =====================================================
 
 int main(int argc, char *argv[]) {
   RunOptions options;
   if (!readOptions(argc, argv, options)) return 1;
 
-  // ConfigLoader recibe los dos argumentos que siempre ha aceptado.
   char *configArgs[] = {argv[0], argv[1]};
   SimulationConfig config;
   if (!loadAndValidateConfig(2, configArgs, config)) return 1;
   if (options.hasLogPath) config.logFilePath = options.logPath;
 
-  // DP12.8: la interfaz publica SIEMPRE abre una ventana.
-  // Las opciones de diagnostico solo se compilan en delivery_sim_bench.
 #ifdef EQUIPEGO_BENCHMARK_CLI
   const bool showGui = options.display != DisplayMode::Headless;
   if (options.hasScale) config.simulation.timeScale = options.scale;
@@ -463,12 +433,8 @@ int main(int argc, char *argv[]) {
 #endif
 
   try {
-    // Instalar manejadores antes de arrancar hilos del simulador.
     SignalStopController signals;
 
-    // =========================================
-    // 1. CREAR COMPONENTES ORIGINALES
-    // =========================================
     SimulationClock clock;
     EventLogger logger(config.logFilePath, true);
     RoadNetwork roadNetwork(config);
@@ -477,18 +443,12 @@ int main(int argc, char *argv[]) {
     Fleet fleet(config, roadNetwork, clock);
     Dispatcher dispatcher(config, roadNetwork, fleet);
 
-    // HighGUI solo corre en este hilo. Se abre ANTES de iniciar
-    // los threads del productor y dispatcher para no dejarlos
-    // vivos si falla la inicializacion de la ventana.
     std::unique_ptr<SimulationDashboard> dashboard;
     if (showGui) {
       dashboard = std::make_unique<SimulationDashboard>(config, roadNetwork);
       dashboard->open();
     }
 
-    // =========================================
-    // 2. INICIAR FLOTA
-    // =========================================
     fleet.start();
     std::vector<std::string> courierIds;
     courierIds.reserve(fleet.size());
@@ -499,32 +459,16 @@ int main(int argc, char *argv[]) {
     }
     fleet.startRescue();
 
-    // DP12.2: reloj y deadline comparten origen temporal.
-    // La GUI ya esta abierta y toda la flota se ha inicializado.
-    // Los threads del despacho y del productor aun no han empezado;
-    // esto evita carreras al iniciar el SimulationClock.
     const auto startTime = std::chrono::steady_clock::now();
     clock.start(config.simulation.timeScale);
 
-    // =========================================
-    // 3. DESPACHADOR + MENSAJE INICIAL
-    // =========================================
     std::thread dispatcherThread(&Dispatcher::run, &dispatcher,
                                  std::ref(orderBook), std::ref(logger),
                                  std::ref(clock));
     logger.logStart();
 
-    // =========================================
-    // 4. PRODUCTOR DE PEDIDOS REALES
-    // =========================================
     std::thread producerThread(&OrderProducer::run, &producer);
 
-    // =========================================
-    // 5. ESPERAR FIN DE TIEMPO, GUI O SENAL
-    // =========================================
-    // durationS == 0: ejecutar hasta SIGINT, SIGTERM o cierre GUI.
-    // El deadline controla un maximo de tiempo, nunca una espera
-    // obligatoria luego de que llegue una senal.
     const auto deadline = config.simulation.durationS > 0
         ? startTime + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                           std::chrono::duration<double>(
@@ -540,7 +484,6 @@ int main(int argc, char *argv[]) {
           keepOpen = dashboard->frame(
               fleet, logger.snapshotStats(), clock.getSimulatedTimeMs());
         } catch (const std::exception &error) {
-          // Un error grafico tambien entra al cierre ordenado.
           std::cerr << "Aviso DP9.1 (OpenCV): " << error.what() << '\n';
         }
         if (!keepOpen) break;
@@ -550,36 +493,21 @@ int main(int argc, char *argv[]) {
       signals.waitUntil(deadline);
     }
 
-    // Se sale de este bloque por tiempo, senal o cierre de ventana.
-    // El hilo principal (NUNCA el manejador de senal) detiene y une
-    // los componentes siguiendo el orden de DP7.
 
-    // =========================================
-    // 6. DETENER PRODUCTOR
-    // =========================================
     producer.requestStop();
     producerThread.join();
     const std::size_t createdCount = producer.getCreatedCount();
     const std::size_t producerRejected = producer.getRejectedCount();
 
-    // =========================================
-    // 7. DETENER DISPATCHER
-    // =========================================
     dispatcher.requestStop(orderBook);
     dispatcherThread.join();
     const std::size_t assignedCount = dispatcher.getAssignedCount();
     const std::size_t dispatcherRejected = dispatcher.getRejectedCount();
     const std::size_t dispatcherPending = dispatcher.getPendingCount();
 
-    // =========================================
-    // 8. DETENER FLOTA
-    // =========================================
     fleet.requestStop();
     fleet.join();
 
-    // =========================================
-    // 9. RECUPERAR RESULTADOS
-    // =========================================
     std::vector<CourierOrderResult> fleetResults = fleet.takeFinishedOrders();
     const std::size_t fleetFinalizedCount = fleetResults.size();
     std::size_t deliveredCount = 0;
@@ -600,9 +528,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // =========================================
-    // 10. PENDIENTES DE ORDERBOOK
-    // =========================================
     std::vector<Order> remainingOrders = orderBook.takeRemaining();
     std::size_t bookPendingCount = 0;
     for (Order &order : remainingOrders) {
@@ -612,9 +537,6 @@ int main(int argc, char *argv[]) {
       ++bookPendingCount;
     }
 
-    // =========================================
-    // 11. CONTABILIDAD DEL SIMULADOR
-    // =========================================
     const std::size_t rejectedCount = producerRejected + dispatcherRejected;
     const std::size_t pendingCount =
         fleetPendingCount + dispatcherPending + bookPendingCount;
@@ -629,16 +551,10 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("Balance global de pedidos incorrecto");
     }
 
-    // =========================================
-    // 12. ULTIMO EVENTO JSONL
-    // =========================================
     logger.logEvent({{"event", "simulationStopping"}},
                     clock.getSimulatedTimeMs());
     logger.flush();
 
-    // =========================================
-    // 13. AUDITORIA DEL ARCHIVO
-    // =========================================
     const EventAudit audit = auditEventLog(config.logFilePath, courierIds);
     if (audit.created != createdCount || audit.delivered != deliveredCount ||
         audit.rejected != rejectedCount ||
@@ -656,9 +572,6 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("Los pedidos pendientes no coinciden");
     }
 
-    // =========================================
-    // 14. METRICAS
-    // =========================================
     const double avgDeliveryMs =
         audit.delivered > 0
             ? static_cast<double>(audit.deliveryDurationSumMs) /
@@ -675,9 +588,6 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("La suma por repartidor no coincide");
     }
 
-    // =========================================
-    // 15. RESUMEN FINAL - ULTIMA LINEA STDOUT
-    // =========================================
     const nlohmann::json summary = {{"created", audit.created},
                                     {"delivered", audit.delivered},
                                     {"rejected", audit.rejected},

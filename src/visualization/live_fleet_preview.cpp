@@ -29,9 +29,6 @@ constexpr double kDefaultTimeScale = 3.0;
 constexpr int kPanelWidth = 260;
 constexpr int kFrameDelayMs = 33;
 
-// =====================================================
-// COLORES INDIVIDUALES DE LAS MOTOS (BGR)
-// =====================================================
 
 const std::array<cv::Scalar, 8> kCourierColors = {{{255, 85, 40},
                                                    {50, 170, 250},
@@ -70,9 +67,6 @@ std::string stateName(CourierState state) {
   return "Desconocido";
 }
 
-// =====================================================
-// COORDENADAS DEL GRAFO
-// =====================================================
 
 cv::Point2d nodePosition(const SimulationConfig &config,
                          const std::string &nodeId) {
@@ -87,9 +81,6 @@ cv::Point2d nodePosition(const SimulationConfig &config,
   return cv::Point2d(p.x, p.y);
 }
 
-// =====================================================
-// INTERPOLACION LINEAL ENTRE DOS PUNTOS
-// =====================================================
 
 cv::Point2d interpolate(const cv::Point2d &from, const cv::Point2d &to,
                         double progress) {
@@ -100,9 +91,6 @@ cv::Point2d interpolate(const cv::Point2d &from, const cv::Point2d &to,
                      from.y + (to.y - from.y) * alpha);
 }
 
-// =====================================================
-// DATOS QUE EL VISOR LEE DE LA FLOTA
-// =====================================================
 
 struct CourierSample {
   std::string id;
@@ -113,19 +101,6 @@ struct CourierSample {
   double progress = 0.0;
 };
 
-// =====================================================
-// INTERPOLADOR DE UN TRAMO DE LA RUTA
-// =====================================================
-//
-// Courier actualiza currentNode al terminar
-// cada calle.
-//
-// El visor usa el ultimo nodo confirmado
-// y la siguiente calle de RoadNetwork para
-// representar el avance ENTRE ambos nodos.
-//
-// No cambia el estado real de Courier.
-// =====================================================
 
 class MotionTracker {
 private:
@@ -168,8 +143,6 @@ public:
 
     nextNode = segment.to;
 
-    // Un tramo comienza al ver movimiento o
-    // al detectar que Courier alcanzo otro nodo.
     if (!active || lastNode != currentNode || lastTarget != targetNode ||
         lastNextNode != nextNode) {
 
@@ -201,9 +174,6 @@ public:
   }
 };
 
-// =====================================================
-// TOMAR MUESTRA DE LAS 8 MOTOS
-// =====================================================
 
 std::vector<CourierSample>
 sampleFleet(Fleet &fleet, const SimulationConfig &config,
@@ -220,8 +190,6 @@ sampleFleet(Fleet &fleet, const SimulationConfig &config,
     CourierSample sample;
     sample.id = courier.getId();
 
-    // Getters existentes, protegidos
-    // individualmente por stateMutex.
     sample.node = courier.getCurrentNode();
     sample.state = courier.getState();
 
@@ -235,9 +203,6 @@ sampleFleet(Fleet &fleet, const SimulationConfig &config,
   return samples;
 }
 
-// =====================================================
-// DIBUJAR MARCADOR INDIVIDUAL
-// =====================================================
 
 void drawCourier(cv::Mat &frame, const CourierSample &sample,
                  std::size_t index) {
@@ -247,15 +212,12 @@ void drawCourier(cv::Mat &frame, const CourierSample &sample,
 
   const cv::Scalar color = courierColor(index);
 
-  // Aro exterior: estado de la moto.
   cv::circle(frame, center, 17, stateColor(sample.state), cv::FILLED,
              cv::LINE_AA);
 
-  // Borde blanco.
   cv::circle(frame, center, 14, cv::Scalar(255, 255, 255), cv::FILLED,
              cv::LINE_AA);
 
-  // Color fijo del repartidor.
   cv::circle(frame, center, 12, color, cv::FILLED, cv::LINE_AA);
 
   int baseline = 0;
@@ -270,9 +232,6 @@ void drawCourier(cv::Mat &frame, const CourierSample &sample,
               cv::LINE_AA);
 }
 
-// =====================================================
-// RENDERIZAR UN FRAME
-// =====================================================
 
 cv::Mat renderFleet(const cv::Mat &networkImage,
                     const std::vector<CourierSample> &samples,
@@ -285,14 +244,9 @@ cv::Mat renderFleet(const cv::Mat &networkImage,
   networkImage.copyTo(
       frame(cv::Rect(0, 0, networkImage.cols, networkImage.rows)));
 
-  // =========================================
-  // REPRESENTAR MOTOS SOBRE LA RED
-  // =========================================
 
   std::vector<bool> drawn(samples.size(), false);
 
-  // Si varias motos estan practicamente
-  // en el mismo punto, dibujar cantidad.
   for (std::size_t i = 0; i < samples.size(); ++i) {
 
     if (drawn[i]) {
@@ -325,9 +279,6 @@ cv::Mat renderFleet(const cv::Mat &networkImage,
       continue;
     }
 
-    // Un grupo representa varias motos muy
-    // proximas. Se identifican por separado
-    // en el panel lateral.
     const cv::Point center(
         static_cast<int>(std::lround(samples[i].position.x)),
         static_cast<int>(std::lround(samples[i].position.y)));
@@ -345,9 +296,6 @@ cv::Mat renderFleet(const cv::Mat &networkImage,
                 cv::LINE_AA);
   }
 
-  // =========================================
-  // PANEL LATERAL
-  // =========================================
 
   const int x = networkImage.cols + 15;
 
@@ -399,9 +347,6 @@ cv::Mat renderFleet(const cv::Mat &networkImage,
   return frame;
 }
 
-// =====================================================
-// ELEGIR DESTINOS CON IDA Y VUELTA
-// =====================================================
 
 std::vector<std::string> chooseDestinations(const SimulationConfig &config,
                                             const RoadNetwork &network,
@@ -435,9 +380,6 @@ std::vector<std::string> chooseDestinations(const SimulationConfig &config,
   return destinations;
 }
 
-// =====================================================
-// COMPROBAR INTERFAZ GRAFICA
-// =====================================================
 
 void requireGraphics() {
 
@@ -455,9 +397,6 @@ void requireGraphics() {
 #endif
 }
 
-// =====================================================
-// VALIDAR INTERPOLACION
-// =====================================================
 
 bool testInterpolation() {
 
@@ -475,11 +414,8 @@ bool testInterpolation() {
          cv::norm(end - to) < 1e-9;
 }
 
-// =====================================================
-// PROGRAMA PRINCIPAL
-// =====================================================
 
-} // namespace
+} 
 
 int main(int argc, char *argv[]) {
 
@@ -492,9 +428,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // =========================================
-  // LEER OPCIONES
-  // =========================================
 
   for (int i = 2; i < argc; ++i) {
 
@@ -543,9 +476,6 @@ int main(int argc, char *argv[]) {
 
   try {
 
-    // =========================================
-    // BAJAR VELOCIDAD SOLO EN ESTE VISOR
-    // =========================================
 
     config.simulation.timeScale = chosenScale;
 
@@ -574,9 +504,6 @@ int main(int argc, char *argv[]) {
 
     std::vector<MotionTracker> trackers(fleet.size());
 
-    // =========================================
-    // INICIAR LAS 8 RUTAS REALES
-    // =========================================
 
     for (std::size_t i = 0; i < fleet.size(); ++i) {
 
@@ -587,9 +514,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // =========================================
-    // PRUEBA AUTOMATICA SIN VENTANA
-    // =========================================
 
     if (checkOnly) {
 
@@ -626,9 +550,6 @@ int main(int argc, char *argv[]) {
       return valid ? 0 : 1;
     }
 
-    // =========================================
-    // VISOR EN EL HILO PRINCIPAL
-    // =========================================
 
     const std::string title = "EquipeGo - Motos en movimiento";
 
@@ -640,13 +561,9 @@ int main(int argc, char *argv[]) {
               << "Escala visual: " << chosenScale << "x\n"
               << "Pulsa Q o ESC para salir.\n";
 
-    // =========================================
-    // ACTUALIZACION ~30 FPS
-    // =========================================
 
     while (true) {
 
-      // Al llegar al destino, invertir recorrido.
       for (std::size_t i = 0; i < fleet.size(); ++i) {
 
         Courier &courier = fleet.at(i);
@@ -671,8 +588,6 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      // Leer estado y calcular posiciones
-      // intermedias de cada moto.
       const auto samples = sampleFleet(fleet, config, network, nextTargets,
                                        trackers, SteadyClock::now());
 
@@ -696,9 +611,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // =========================================
-    // APAGADO ORDENADO
-    // =========================================
 
     fleet.requestStop();
     fleet.join();

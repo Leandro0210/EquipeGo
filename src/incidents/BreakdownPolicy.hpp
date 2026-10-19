@@ -9,8 +9,6 @@ namespace incidents {
 struct BreakdownPlan {
   bool occurs = false;
 
-  // Fraccion del recorrido donde ocurre.
-  // Ejemplo: 0.45 significa el 45% del viaje.
   double atFraction = 0.0;
 };
 
@@ -55,18 +53,13 @@ inline std::uint64_t makeHash(unsigned int seed, const std::string &courierId,
 }
 
 inline double toUnitInterval(std::uint64_t hash) noexcept {
-  // Utilizar 53 bits para generar
-  // un valor uniforme en [0, 1).
   constexpr double denominator = 9007199254740992.0;
 
   return static_cast<double>(hash >> 11) / denominator;
 }
 
-} // namespace detail
+} 
 
-// =====================================================
-// PLANIFICAR UNA AVERIA PARA UN VIAJE
-// =====================================================
 
 inline BreakdownPlan makeBreakdownPlan(unsigned int seed,
                                        const std::string &courierId,
@@ -83,11 +76,9 @@ inline BreakdownPlan makeBreakdownPlan(unsigned int seed,
       breakdownProbability >= 1.0 ||
       (breakdownProbability > 0.0 && occurrenceSample < breakdownProbability);
 
-  // Reservamos un margen al inicio y al final.
-  // Si ocurre una averia, sera durante el viaje.
   const double atFraction = 0.10 + 0.80 * positionSample;
 
   return BreakdownPlan{occurs, atFraction};
 }
 
-} // namespace incidents
+} 

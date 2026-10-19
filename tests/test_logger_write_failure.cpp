@@ -8,16 +8,6 @@
 #include <thread>
 #include <vector>
 
-// =====================================================
-// DP7 - FALLO DE ESCRITURA DURANTE CONCURRENCIA
-// =====================================================
-//
-// /dev/full es un dispositivo Linux que
-// permite abrir un archivo pero devuelve
-// ENOSPC al intentar escribir.
-//
-// Esto permite simular un disco lleno sin
-// llenar realmente el disco del usuario.
 
 int main() {
 
@@ -33,7 +23,6 @@ int main() {
 
   try {
 
-    // Debe poder abrirse normalmente.
     EventLogger logger("/dev/full");
 
     std::vector<std::thread> workers;
@@ -41,9 +30,6 @@ int main() {
 
     const std::string payload(64, 'X');
 
-    // =========================================
-    // ESCRITURAS CONCURRENTES
-    // =========================================
 
     for (int i = 0; i < kThreads; ++i) {
 
@@ -66,8 +52,6 @@ int main() {
 
         } catch (...) {
 
-          // Ninguna excepcion de escritura
-          // deberia escapar del hilo.
           workerExceptions.fetch_add(1);
         }
       });
@@ -79,9 +63,6 @@ int main() {
 
     allWorkersFinished = true;
 
-    // =========================================
-    // DETECTAR ERROR AL FINAL
-    // =========================================
 
     try {
 
@@ -99,9 +80,6 @@ int main() {
     return 1;
   }
 
-  // =========================================
-  // RESULTADOS
-  // =========================================
 
   const bool workersOk = allWorkersFinished && workerExceptions.load() == 0;
 

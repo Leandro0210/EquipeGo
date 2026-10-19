@@ -13,9 +13,6 @@
 #include <stdexcept>
 #include <string>
 
-// =====================================================
-// TEST DP7.2 - TRANSACCION DE ASIGNACION
-// =====================================================
 
 int main(int argc, char *argv[]) {
 
@@ -39,9 +36,6 @@ int main(int argc, char *argv[]) {
 
   Order order(orderId, "r3", "n23", clock.getSimulatedTimeMs());
 
-  // =========================================
-  // 1. SIMULAR ERROR DEL REGISTRO
-  // =========================================
 
   bool exceptionCaught = false;
 
@@ -58,9 +52,6 @@ int main(int argc, char *argv[]) {
                           order.orderId == orderId &&
                           order.getState() == OrderState::Created;
 
-  // =========================================
-  // 2. REGISTRAR ASIGNACION CORRECTA
-  // =========================================
 
   const std::string filename =
       "equipego_dp7_callback_" +
@@ -90,9 +81,6 @@ int main(int argc, char *argv[]) {
     accepted = accepted && callbackCalled && courier.getReservedCount() == 1 &&
                state.has_value() && *state == OrderState::Assigned;
 
-    // =====================================
-    // 3. RECHAZAR CUANDO NO HAY CAPACIDAD
-    // =====================================
 
     bool unexpectedCallback = false;
 
@@ -105,9 +93,6 @@ int main(int argc, char *argv[]) {
                               courier.getReservedCount() == 1;
   }
 
-  // =========================================
-  // 4. VERIFICAR EL JSONL
-  // =========================================
 
   std::ifstream input(path);
 
@@ -135,9 +120,6 @@ int main(int argc, char *argv[]) {
   input.close();
   std::filesystem::remove(path);
 
-  // =========================================
-  // 5. RESULTADOS
-  // =========================================
 
   std::cout << "=== TEST DP7 ASSIGNMENT CALLBACK ===\n";
 

@@ -1,17 +1,5 @@
 #pragma once
 
-// DP10.2: memoizacion concurrente de una distancia entre dos nodos.
-// La PRIMERA llamada por par (origen, destino) calcula la distancia;
-// las otras llamadas reutilizan un shared_future de manera segura.
-//
-// Por que promise/shared_future:
-// - No se ejecuta Dijkstra bajo el mutex global de la cache.
-// - Solo un hilo calcula cada par, incluso con 64 motos.
-// - Las esperas por el MISMO par son bloqueantes, sin busy waiting.
-// - Si falla el calculo, todos los interesados reciben la excepcion.
-//
-// La red de calles es inmutable mientras vive el Dispatcher, por lo que
-// guardar las distancias durante toda su vida no cambia los resultados.
 
 #include <exception>
 #include <future>

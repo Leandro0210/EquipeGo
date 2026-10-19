@@ -28,10 +28,8 @@ int main() {
     return 1;
   }
 
-  // Simular el final de la ejecucion.
   book.requestStop();
 
-  // El consumidor ya no puede extraer pedidos.
   if (book.waitAndTake().has_value()) {
     std::cerr << "ERROR: consumidor activo despues del stop\n";
     return 1;

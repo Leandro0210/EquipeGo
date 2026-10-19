@@ -21,9 +21,6 @@
 
 using RealClock = std::chrono::steady_clock;
 
-// =====================================================
-// ESPERAR UNA ENTREGA SIN BUSY WAITING
-// =====================================================
 
 bool waitForDelivery(Courier &courier, const std::string &orderId,
                      const std::shared_ptr<CapacitySignal> &signal) {
@@ -50,9 +47,6 @@ bool waitForDelivery(Courier &courier, const std::string &orderId,
   return finalState && *finalState == OrderState::Delivered;
 }
 
-// =====================================================
-// TEST PRINCIPAL
-// =====================================================
 
 int main(int argc, char *argv[]) {
 
@@ -67,8 +61,6 @@ int main(int argc, char *argv[]) {
   config.simulation.timeScale = 120.0;
   config.incidents.breakdownProbability = 0.0;
 
-  // El restaurante de prueba esta en el
-  // nodo inicial, con preparacion inmediata.
   bool restaurantFound = false;
 
   for (Restaurant &restaurant : config.restaurants) {
@@ -97,9 +89,6 @@ int main(int argc, char *argv[]) {
   bool assigned = false;
   bool delivered = false;
 
-  // =========================================
-  // 1. EJECUTAR EL REPARTIDOR
-  // =========================================
 
   {
     SimulationClock clock;
@@ -119,7 +108,6 @@ int main(int argc, char *argv[]) {
 
     std::thread worker(&Courier::run, &courier);
 
-    // La creacion precede a la asignacion.
     logger.logEvent(
         {{"event", "orderCreated"}, {"order", orderId}, {"restaurant", "r3"}},
         clock.getSimulatedTimeMs());
@@ -139,9 +127,6 @@ int main(int argc, char *argv[]) {
     worker.join();
   }
 
-  // =========================================
-  // 2. ANALIZAR ARCHIVO JSONL
-  // =========================================
 
   const std::vector<std::string> expected = {"orderCreated", "orderAssigned",
                                              "pickupStarted", "orderPickedUp",
@@ -171,9 +156,6 @@ int main(int argc, char *argv[]) {
 
   std::filesystem::remove(path);
 
-  // =========================================
-  // 3. VERIFICAR ORDEN Y CAMPOS
-  // =========================================
 
   bool correctSequence = events.size() == expected.size();
 
@@ -225,9 +207,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // =========================================
-  // 4. MOSTRAR RESULTADOS
-  // =========================================
 
   std::cout << "=== TEST DP7 COURIER LIFECYCLE ===\n";
 

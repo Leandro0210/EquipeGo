@@ -7,9 +7,6 @@
 #include <iostream>
 #include <string>
 
-// =====================================================
-// DP8.2 - PREVISUALIZACION DE RED EQUIPETROL
-// =====================================================
 
 int main(int argc, char *argv[]) {
 
@@ -72,9 +69,6 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Restaurantes: " << config.restaurants.size() << '\n';
 
-    // =========================================
-    // MOSTRAR RELACION DE RESTAURANTES
-    // =========================================
 
     for (const Restaurant &restaurant : config.restaurants) {
 
@@ -82,9 +76,6 @@ int main(int argc, char *argv[]) {
                 << restaurant.nodeId << ")\n";
     }
 
-    // =========================================
-    // COMPROBACION SIN INTERFAZ GRAFICA
-    // =========================================
 
     if (mode == "--check") {
 
@@ -95,9 +86,6 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Pulsa Q o ESC para cerrar.\n";
 
-    // =========================================
-    // ELEGIR IMAGEN A VISUALIZAR
-    // =========================================
 
     if (mode == "--base") {
 

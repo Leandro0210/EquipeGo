@@ -33,7 +33,6 @@ private:
   std::vector<std::unique_ptr<Courier>> couriers;
   std::vector<std::thread> threads;
 
-  // DP6: coordinador de rescate.
   std::thread rescueThread;
   std::atomic<bool> rescueStopRequested{false};
 
@@ -56,9 +55,6 @@ public:
 
   void start();
 
-  // Iniciar el rescate automatico.
-  // Separado de start() para conservar
-  // los tests manuales de transferencia.
   void startRescue();
 
   void requestStop();

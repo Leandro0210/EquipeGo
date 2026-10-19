@@ -77,7 +77,6 @@ int main(int argc, char *argv[]) {
     valid = false;
   }
 
-  // Probar errores independientes en las tareas.
   Order invalid("dp4_invalid", config.restaurants.at(0).id, "nodo_inexistente",
                 0);
 

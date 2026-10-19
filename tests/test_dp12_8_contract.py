@@ -76,7 +76,6 @@ def check_runtime(official: Path, bench: Path) -> None:
         assert proc.returncode==0, f'bench fallo: {proc.stderr[-1500:]}'
         examine(proc.stdout,logfile)
         print('OK DP12.8 benchmark ejecuta headless con duracion JSON')
-        # Si hay una pantalla disponible, comprobar tambien apertura normal, sin flags extra.
         if os.getenv('DISPLAY') or os.getenv('WAYLAND_DISPLAY'):
             logfile=base/'official.jsonl'
             proc=subprocess.run([str(official),str(base/'benchmark.json'),'--log',str(logfile)],

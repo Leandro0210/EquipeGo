@@ -23,7 +23,6 @@ def replace_exact(text: str, old: str, new: str, label: str) -> str:
 
 
 def main_patch(source: str) -> str:
-    # El API oficial no expone opciones que cambian el comportamiento del JSON.
     source = replace_exact(source,
         'enum class DisplayMode { Auto, Gui, Headless };\n\nstruct RunOptions {\n'
         '  DisplayMode display = DisplayMode::Auto;\n  bool hasScale = false;\n'
@@ -164,8 +163,6 @@ def dashboard_patch(source: str) -> str:
         '               cv::FILLED, cv::LINE_AA);\n'
         '    cv::circle(frame, center, i == selected ? 7 : 5,\n'
         '               stateColor(samples[i].courier), cv::FILLED, cv::LINE_AA);\n', 'motos estado')
-    # La leyenda compacta NO quita filas del panel de los 8 repartidores.
-    # Se dibuja al final para permanecer encima del resaltado seleccionado.
     source = replace_exact(source,
         '    drawText(frame, v.phase, x + 22, y + 33, 0.33);\n'
         '  }\n\n'
@@ -245,8 +242,6 @@ def collect_changes() -> dict[Path, str]:
         if BENCH_FLAG in original and rel=='src/main.cpp':
             raise RuntimeError('DP12.8 ya parece aplicado; no duplicar')
         changes[p]=fn(original)
-    # Otros bancos de prueba usaban el binario principal con flags internos.
-    # Al introducir el CLI estricto, apuntar los defaults a la variante bench.
     benchmark_dir=ROOT/'benchmarks'
     for p in sorted(benchmark_dir.glob('*.py')):
         if p.name==Path(__file__).name: continue

@@ -25,9 +25,6 @@ from xml.sax.saxutils import escape
 
 import dp8_6_scalability as base
 
-# Cada escenario modifica EXCLUSIVAMENTE estos dos parametros de orders.
-# La semilla seed, las 8 motos, las calles, los restaurantes y el resto del
-# archivo JSON permanecen iguales.
 SCENARIOS = {
     "baja": {"meanIntervalMs": 120000, "burstMax": 1},
     "media": {"meanIntervalMs": 45000, "burstMax": 2},
@@ -101,8 +98,6 @@ def load_original_config(config_path):
     image = image.resolve()
     if not image.is_file():
         raise FileNotFoundError(f"No se encontro el mapa original: {image}")
-    # La ruta absoluta es necesaria: el runner ejecuta cada copia desde
-    # un directorio aislado por escenario y repeticion.
     config["map"]["image"] = str(image)
     return config
 

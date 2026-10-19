@@ -35,24 +35,18 @@ def modify(code: str) -> str:
             raise ValueError('DP12.2 aparece aplicado parcialmente o duplicado')
         return code
 
-    # 1. La construccion de componentes y la apertura de HighGUI pueden tardar.
-    #    No debemos acumular tiempo simulado ANTES de que arranque la operacion.
     code = replace_one(
         code,
         '    SimulationClock clock;\n    clock.start(config.simulation.timeScale);\n    EventLogger logger(',
         '    SimulationClock clock;\n    EventLogger logger(',
     )
 
-    # 2. El limite actual empieza despues del productor; esto desincroniza
-    #    fecha final y milisegundos del reloj (y el GUI intensifica el problema).
     code = replace_one(
         code,
         '    const auto startTime = std::chrono::steady_clock::now();\n    const auto deadline =',
         '    const auto deadline =',
     )
 
-    # 3. Comenzar justo antes del despachador, cuando la GUI y la flota YA
-    #    estan listas, y reutilizar ese mismo instante para el deadline.
     code = replace_one(
         code,
         '''    fleet.startRescue();

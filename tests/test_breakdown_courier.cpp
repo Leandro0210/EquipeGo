@@ -80,9 +80,6 @@ int main(int argc, char *argv[]) {
   bool shutdownOk = false;
   bool normalTravelOk = false;
 
-  // ============================================
-  // TEST 1: AVERIA OBLIGATORIA
-  // ============================================
 
   {
     config.incidents.breakdownProbability = 1.0;
@@ -114,14 +111,11 @@ int main(int argc, char *argv[]) {
                        *activeState == OrderState::PickedUp && queuedState &&
                        *queuedState == OrderState::Assigned;
 
-    // La moto averiada no acepta nuevos pedidos.
     const bool rejectedNewOrder = !fleet.at(0).tryAssignOrder(
         Order("broken_extra", "r3", "n23", clock.getSimulatedTimeMs()));
 
     cargoPreservedOk = cargoPreservedOk && rejectedNewOrder;
 
-    // Todavia no existe transferencia:
-    // al apagar, la carga queda Pending.
     fleet.requestStop();
     fleet.join();
 
@@ -142,9 +136,6 @@ int main(int argc, char *argv[]) {
                  fleet.at(0).getReservedCount() == 0;
   }
 
-  // ============================================
-  // TEST 2: PROBABILIDAD CERO
-  // ============================================
 
   {
     config.incidents.breakdownProbability = 0.0;
@@ -173,9 +164,6 @@ int main(int argc, char *argv[]) {
                      results[0].order.getState() == OrderState::Delivered;
   }
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP6 BREAKDOWN COURIER ===\n";
 

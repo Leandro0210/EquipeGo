@@ -82,9 +82,6 @@ int main(int argc, char *argv[]) {
   bool simultaneousOk = false;
   bool noDeadlockOk = false;
 
-  // ============================================
-  // TEST 1: RESCATE AUTOMATICO
-  // ============================================
 
   {
     config.incidents.breakdownProbability = 0.5;
@@ -129,9 +126,6 @@ int main(int argc, char *argv[]) {
                   results[0].order.getState() == OrderState::Delivered;
   }
 
-  // ============================================
-  // TEST 2: DOS AVERIAS, SIN CAPACIDAD
-  // ============================================
 
   {
     config.incidents.breakdownProbability = 1.0;
@@ -185,9 +179,6 @@ int main(int argc, char *argv[]) {
                    ids.size() == 2 && pending == 2;
   }
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP6 FLEET AUTO RESCUE ===\n";
 

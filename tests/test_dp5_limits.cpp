@@ -19,16 +19,12 @@ int main(int argc, char *argv[]) {
   bool bagOk = false;
   bool pickupOk = false;
 
-  // ============================================
-  // TEST 1: MAXPENDING BAJO CONCURRENCIA
-  // ============================================
 
   {
     OrderBook book(10);
     std::atomic<int> accepted{0};
     std::vector<std::thread> workers;
 
-    // 32 productores compiten por 10 espacios.
     for (int i = 0; i < 32; ++i) {
       workers.emplace_back([&, i] {
         Order order("book_" + std::to_string(i), "r3", "n8", 0);
@@ -46,8 +42,6 @@ int main(int argc, char *argv[]) {
     const bool initialLimit =
         accepted.load() == 10 && book.size() == 10 && book.full();
 
-    // Un pedido extraido sigue ocupando
-    // capacidad mientras esta inFlight.
     auto taken = book.tryTake();
 
     const bool inflightProtected =
@@ -66,9 +60,6 @@ int main(int argc, char *argv[]) {
              remaining.size() == 10;
   }
 
-  // ============================================
-  // TEST 2: PICKUPSLOTS BAJO CONCURRENCIA
-  // ============================================
 
   {
     PickupGate gate(2);
@@ -106,9 +97,6 @@ int main(int argc, char *argv[]) {
                gate.waitingCount() == 0;
   }
 
-  // ============================================
-  // TEST 3: BAGCAPACITY BAJO CONCURRENCIA
-  // ============================================
 
   SimulationConfig config;
 
@@ -121,9 +109,6 @@ int main(int argc, char *argv[]) {
   config.fleet.startNode = "n8";
   config.simulation.timeScale = 60.0;
 
-  // Evitar entregas durante el test:
-  // cada pedido requiere 10 minutos simulados
-  // de preparacion.
   for (Restaurant &restaurant : config.restaurants) {
     if (restaurant.id == "r3") {
       restaurant.prepTimeMinMs = 600000;
@@ -144,8 +129,6 @@ int main(int argc, char *argv[]) {
 
   std::vector<std::thread> workers;
 
-  // Ocho hilos intentan asignar simultaneamente
-  // 128 pedidos a las ocho motos.
   for (int worker = 0; worker < 8; ++worker) {
     workers.emplace_back([&, worker] {
       for (int j = 0; j < 16; ++j) {
@@ -203,9 +186,6 @@ int main(int argc, char *argv[]) {
   bagOk = capacityValid.load() && accepted.load() == 16 && everyCourierFull &&
           results.size() == 16 && allPending && allReleased;
 
-  // ============================================
-  // RESULTADOS
-  // ============================================
 
   std::cout << "=== TEST DP5 RESOURCE LIMITS ===\n";
 

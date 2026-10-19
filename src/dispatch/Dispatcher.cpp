@@ -20,9 +20,6 @@ namespace {
 
 using RealClock = std::chrono::steady_clock;
 
-// =====================================================
-// RESULTADO DE UNA COTIZACION CON TIEMPO
-// =====================================================
 
 struct TimedQuote {
   std::optional<EtaQuote> quote;
@@ -30,11 +27,8 @@ struct TimedQuote {
   RealClock::time_point finishedAt;
 };
 
-} // namespace
+} 
 
-// =====================================================
-// EJECUTOR DE TAREAS ETA ORIGINAL - NO CAMBIA EL POOL
-// =====================================================
 
 class QuoteExecutor {
 private:
@@ -61,7 +55,6 @@ private:
         jobs.pop_front();
       }
 
-      // Ejecutar sin mantener el mutex.
       job();
     }
   }
@@ -123,9 +116,6 @@ public:
   }
 };
 
-// =====================================================
-// CONSTRUCTOR DEL DISPATCHER
-// =====================================================
 
 Dispatcher::Dispatcher(const SimulationConfig &config,
                        const RoadNetwork &roadNetwork, Fleet &fleet,
@@ -133,18 +123,6 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
     : config(config), roadNetwork(roadNetwork), fleet(fleet),
       calculator(std::move(customCalculator)) {
 
-  // ==================================================
-  // DP10.2 - MEMOIZACION DEL TRAMO COMPARTIDO
-  //
-  // Antes: C cotizaciones por pedido * 2 Dijkstra.
-  // Ahora: C Dijkstra moto->restaurante + como mucho
-  //        1 Dijkstra por cada par restaurante->cliente
-  //        EN TODA la vida de este Dispatcher.
-  //
-  // Esta optimizacion se aplica SOLO al calculador ETA
-  // por defecto; el calculador inyectado por pruebas
-  // sigue invocandose exactamente como antes.
-  // ==================================================
 
   if (!calculator) {
     auto sharedLegCache = std::make_shared<SharedDistanceCache>();
@@ -152,18 +130,12 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
     calculator = [this, sharedLegCache](const std::string &startNode,
                                        const std::string &restaurantNode,
                                        const std::string &deliveryNode) -> double {
-      // Moto -> restaurante: cambia segun la moto y su posicion.
       const auto toRestaurant =
           this->roadNetwork.shortestRoute(startNode, restaurantNode);
       if (!toRestaurant) {
         throw std::runtime_error("No existe una ruta valida");
       }
 
-      // Restaurante -> cliente: la red es estatica. Compartir el
-      // resultado entre TODOS los candidatos y pedidos repetidos.
-      // La cache usa mutex solo para publicar/consultar el future;
-      // Dijkstra se ejecuta FUERA de ese mutex y puede ser concurrente
-      // para pares distintos.
       const double toCustomerMeters = sharedLegCache->get(
           restaurantNode, deliveryNode, [this, &restaurantNode,
                                          &deliveryNode]() -> double {
@@ -182,7 +154,6 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
     };
   }
 
-  // El mismo limite de workers que el codigo ANTES.
   const std::size_t hardware =
       std::max<std::size_t>(2, std::thread::hardware_concurrency());
   const std::size_t workerCount = std::max<std::size_t>(
@@ -192,9 +163,6 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
 
 Dispatcher::~Dispatcher() = default;
 
-// =====================================================
-// COTIZACIONES ETA CON TIMEOUT REAL - SIN CAMBIOS
-// =====================================================
 
 QuoteBatch Dispatcher::quoteCandidates(const Order &order) const {
   QuoteBatch batch;
@@ -221,8 +189,6 @@ QuoteBatch Dispatcher::quoteCandidates(const Order &order) const {
   std::vector<PendingQuote> pending;
   pending.reserve(fleet.size());
 
-  // Una tarea independiente por repartidor, sin bloquear la ventana,
-  // el productor ni los hilos de los repartidores.
   for (std::size_t i = 0; i < fleet.size(); ++i) {
     Courier &courier = fleet.at(i);
     if (courier.getState() == CourierState::Broken) {
@@ -287,9 +253,6 @@ QuoteBatch Dispatcher::quoteCandidates(const Order &order) const {
   return batch;
 }
 
-// =====================================================
-// SELECCIONAR MOTO CON MENOR ETA - SIN CAMBIOS
-// =====================================================
 
 std::optional<std::string> Dispatcher::assignBestCourier(Order &order) const {
   QuoteBatch batch = quoteCandidates(order);

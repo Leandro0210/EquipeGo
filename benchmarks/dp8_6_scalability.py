@@ -122,8 +122,6 @@ def run_trial(args, root, binary, original_config, number, repeat, deadline_s):
     folder = root / f"motos_{number:03d}" / f"repeticion_{repeat:02d}"
     folder.mkdir(parents=True, exist_ok=False)
 
-    # La copia apunta a la imagen ORIGINAL mediante ruta absoluta.
-    # El ConfigLoader resuelve map.image respecto del nuevo JSON.
     config = json.loads(json.dumps(original_config))
     config["fleet"]["couriers"] = number
     (folder / "config.json").write_text(
@@ -219,7 +217,6 @@ def aggregate(rows, fleets):
 
 
 def render_svg(entries, path):
-    # Grafico 100% apilado: distribucion de estados finales por flota.
     width, left, right, top, row_height = 950, 118, 160, 105, 55
     plot_width = width - left - right
     height = top + len(entries) * row_height + 92
@@ -301,7 +298,6 @@ def main():
     image_path = image_path.resolve()
     if not image_path.is_file():
         raise FileNotFoundError(f"No se encuentra el mapa original: {image_path}")
-    # Solo en las COPIAS, para que la imagen cargue desde una carpeta temporal.
     original_config["map"]["image"] = str(image_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -28,8 +28,6 @@ public:
     signalCv.notify_all();
   }
 
-  // Espera con deadline para el Dispatcher
-  // y las pruebas existentes.
   bool waitUntilChange(std::uint64_t previousVersion,
                        std::chrono::steady_clock::time_point deadline,
                        const std::atomic<bool> &stopRequested) {
@@ -43,7 +41,6 @@ public:
     return generation != previousVersion && !stopRequested.load();
   }
 
-  // DP6: espera sin polling para el rescate.
   bool waitForChange(std::uint64_t previousVersion,
                      const std::atomic<bool> &stopRequested) {
     std::unique_lock<std::mutex> lock(signalMutex);

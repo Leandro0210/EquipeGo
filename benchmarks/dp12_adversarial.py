@@ -72,8 +72,6 @@ def valid_config(source: dict, name: str) -> dict:
         c['incidents']['breakdownProbability'] = 1.0
         c['simulation']['durationS'] = 420
     elif name == 'unreachable':
-        # Nodos sin calles: no se necesitan segmentos falsos y el JSON es valido.
-        # Muchos aislados hacen altamente probable el rechazo unreachable.
         n0 = c['nodes'][0]
         for i in range(35):
             c['nodes'].append(dict(id=f'isolated_dp125_{i}', lat=n0['lat'], lon=n0['lon']))
@@ -84,8 +82,6 @@ def valid_config(source: dict, name: str) -> dict:
         c['simulation']['durationS'] = 300
         streets = copy.deepcopy(c['streets'])
         nodes = {n['id']: n for n in c['nodes']}
-        # Subdivisiones adicionales sobre calles EXISTENTES; intersecciones nuevas
-        # pertenecen a la red, respetan el mismo sentido y no cambian el fondo OSM.
         for i in range(210):
             street = streets[i % len(streets)]
             a, b = nodes[street['from']], nodes[street['to']]

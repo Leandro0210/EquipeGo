@@ -26,21 +26,14 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // ================================================
-  // 1. PREPARAR ESCENARIO CONTROLADO
-  // ================================================
 
   config.fleet.couriers = 1;
   config.fleet.bagCapacity = 1;
 
-  // Hacer que la moto tarde bastante en entregar.
   config.fleet.speedKmh = 1.0;
 
-  // Un segundo simulado = un segundo real.
   config.simulation.timeScale = 1.0;
 
-  // El segundo pedido solo puede esperar
-  // 250 milisegundos simulados.
   config.dispatch.acceptTimeoutMs = 250;
   config.dispatch.quoteTimeoutMs = 100;
 
@@ -60,9 +53,6 @@ int main(int argc, char *argv[]) {
 
   long long creationTime = 0;
 
-  // ================================================
-  // 2. INICIAR FLOTA Y DISPATCHER
-  // ================================================
 
   {
     EventLogger logger(logPath);
@@ -71,9 +61,6 @@ int main(int argc, char *argv[]) {
 
     fleet.start();
 
-    // --------------------------------------------
-    // OCUPAR LA UNICA MOTO
-    // --------------------------------------------
 
     Order busyOrder("dp4_busy", "r3", "n23", clock.getSimulatedTimeMs());
 
@@ -89,9 +76,6 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
-    // --------------------------------------------
-    // CREAR SEGUNDO PEDIDO
-    // --------------------------------------------
 
     creationTime = clock.getSimulatedTimeMs();
 
@@ -109,20 +93,13 @@ int main(int argc, char *argv[]) {
 
     Dispatcher dispatcher(config, network, fleet);
 
-    // --------------------------------------------
-    // DETENER LA PRUEBA DESPUES DEL TIMEOUT
-    // --------------------------------------------
 
-    // Esta pausa existe solamente en el test:
-    // establece un limite a su duracion.
-    // El Dispatcher real usa condition_variable.
     std::thread stopper([&] {
       std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
       dispatcher.requestStop(book);
     });
 
-    // Procesar el pedido desde OrderBook.
     try {
       dispatcher.run(book, logger, clock);
 
@@ -150,12 +127,7 @@ int main(int argc, char *argv[]) {
     fleet.join();
   }
 
-  // ================================================
-  // 3. VERIFICAR EVENTO DEL LOG
-  // ================================================
 
-  // El EventLogger ya fue destruido y su
-  // archivo quedo cerrado.
 
   std::ifstream logFile(logPath);
 
@@ -197,9 +169,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // ================================================
-  // 4. COMPROBAR RESULTADOS
-  // ================================================
 
   const bool correctRejection = rejectedCount == 1 && noCourierEvents == 1;
 

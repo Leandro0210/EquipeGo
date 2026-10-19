@@ -1,5 +1,3 @@
-// Test de DP10.2: compila solo con la biblioteca estandar de C++17.
-// Verifica single-flight, clave direccional y propagacion de excepciones.
 #include "dispatch/SharedDistanceCache.hpp"
 
 #include <atomic>
@@ -16,7 +14,6 @@ int main() {
   std::atomic<int> wrong{0};
   std::vector<std::thread> workers;
 
-  // 32 hilos solicitan al mismo tiempo la misma distancia: UNA cuenta.
   for (int i = 0; i < 32; ++i) {
     workers.emplace_back([&]() {
       try {
@@ -38,7 +35,6 @@ int main() {
     return 1;
   }
 
-  // Grafo dirigido: A -> B y B -> A NO comparten distancia.
   const double other = cache.get("n15", "r0", [&] {
     computed.fetch_add(1);
     return 139.0;

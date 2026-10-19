@@ -50,8 +50,6 @@ CASES = (
 
 def prepare_config(src: Path, dst: Path, changes: dict[str, Any]) -> dict[str, Any]:
     config = json.loads(src.read_text(encoding="utf-8"))
-    # El cargador interpreta map.image relativo al archivo JSON. Como el JSON
-    # de prueba vive en otra carpeta, convertimos la ruta a absoluta.
     image = Path(config["map"]["image"])
     config["map"]["image"] = str(
         (image if image.is_absolute() else src.parent / image).resolve()

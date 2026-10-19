@@ -7,9 +7,6 @@
 #include <string>
 #include <utility>
 
-// =====================================================
-// CONSTRUCTOR
-// =====================================================
 
 OrderProducer::OrderProducer(const SimulationConfig &config,
                              OrderBook &orderBook, EventLogger &logger,
@@ -18,9 +15,6 @@ OrderProducer::OrderProducer(const SimulationConfig &config,
     : config(config), orderBook(orderBook), logger(logger), clock(clock),
       roadNetwork(roadNetwork), generator(config.orders) {}
 
-// =====================================================
-// HILO PRODUCTOR
-// =====================================================
 
 void OrderProducer::run() {
 
@@ -47,9 +41,6 @@ void OrderProducer::run() {
 
     const int burstSize = generator.nextBurstSize();
 
-    // ============================================
-    // CREAR PEDIDOS DE LA RAFAGA
-    // ============================================
 
     for (int i = 0; i < burstSize; ++i) {
 
@@ -65,15 +56,11 @@ void OrderProducer::run() {
 
       const std::string orderId = "o" + std::to_string(nextOrderNumber++);
 
-      // Registrar creacion.
       logger.logEvent({{"event", "orderCreated"},
                        {"order", orderId},
                        {"restaurant", restaurant.id}},
                       creationTime);
 
-      // ========================================
-      // RECHAZO: RUTA INALCANZABLE
-      // ========================================
 
       if (!roadNetwork.isReachable(restaurant.nodeId, deliveryNode.id)) {
 
@@ -86,9 +73,6 @@ void OrderProducer::run() {
         continue;
       }
 
-      // ========================================
-      // ENVIAR A ORDERBOOK
-      // ========================================
 
       Order order(orderId, restaurant.id, deliveryNode.id, creationTime);
 
@@ -105,9 +89,6 @@ void OrderProducer::run() {
   }
 }
 
-// =====================================================
-// APAGADO DEL PRODUCTOR
-// =====================================================
 
 void OrderProducer::requestStop() {
 
