@@ -82,6 +82,9 @@ void EventLogger::logEvent(nlohmann::json eventJson,
     ++liveStats.breakdowns;
   } else if (name == "orderReassigned") {
     ++liveStats.reassigned;
+  } else if (name == "courierBreakStarted") {
+
+    ++liveStats.breaks;
   }
 }
 

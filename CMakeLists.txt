@@ -225,3 +225,14 @@ add_test(NAME test_dp12_motion COMMAND test_dp12_motion)
 list(APPEND DP_TEST_NAMES test_dp12_motion)
 
 set_tests_properties(${DP_TEST_NAMES} PROPERTIES TIMEOUT 30)
+
+# NUEVO: VARIANTE C - prueba del descanso, despertador y rechazo de asignacion.
+add_executable(test_courier_breaks
+    tests/test_courier_breaks.cpp
+    ${DP7_COURIER_TEST_SOURCES}
+)
+configure_equipego_target(test_courier_breaks)
+add_test(NAME test_courier_breaks COMMAND test_courier_breaks
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json
+)
+set_tests_properties(test_courier_breaks PROPERTIES TIMEOUT 30)

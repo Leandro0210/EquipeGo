@@ -51,6 +51,9 @@ cv::Scalar stateColor(CourierState state) {
     return {45, 185, 245};
   case CourierState::Broken:
     return {45, 45, 230};
+  // NUEVO: VARIANTE C - rama obligatoria del nuevo enum.
+  case CourierState::Resting:
+    return {185, 70, 165};
   }
   return {90, 90, 90};
 }
@@ -63,6 +66,9 @@ std::string stateName(CourierState state) {
     return "En ruta";
   case CourierState::Broken:
     return "Averiado";
+  // NUEVO: VARIANTE C - nombre visible del descanso.
+  case CourierState::Resting:
+    return "Descansando";
   }
   return "Desconocido";
 }

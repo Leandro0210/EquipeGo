@@ -12,8 +12,7 @@ namespace {
 
 constexpr long long kPickupHandoffMs = 2000;
 
-} 
-
+}
 
 Courier::Courier(std::string id, const SimulationConfig &config,
                  const RoadNetwork &roadNetwork, SimulationClock &clock,
@@ -24,12 +23,10 @@ Courier::Courier(std::string id, const SimulationConfig &config,
       restaurantManager(std::move(restaurantManager)),
       currentNode(config.fleet.startNode) {}
 
-
 void Courier::setEventLogger(EventLogger *logger) {
   std::lock_guard<std::mutex> lock(stateMutex);
   eventLogger = logger;
 }
-
 
 void Courier::run() {
   while (true) {
@@ -54,7 +51,6 @@ void Courier::run() {
       break;
     }
 
-
     if (destination) {
       const std::string target = *destination;
       destination.reset();
@@ -75,7 +71,6 @@ void Courier::run() {
       state = CourierState::Idle;
       continue;
     }
-
 
     activeOrder.emplace(std::move(assignedOrders.front()));
 
@@ -103,10 +98,44 @@ void Courier::run() {
       activeOrder.reset();
     }
 
-    state = CourierState::Idle;
+    const bool bagEmpty = assignedOrders.empty() && blockedOrders.empty() &&
+                          !activeOrder && !destination;
+    const bool mustRest =
+        config.fleet.breakAfterDeliveries > 0 &&
+        deliveriesSinceBreak >=
+            static_cast<std::size_t>(config.fleet.breakAfterDeliveries) &&
+        bagEmpty;
+    if (mustRest) {
+      state = CourierState::Resting;
+      motionInterval.reset();
+
+      if (eventLogger) {
+        eventLogger->logEvent(
+            {{"event", "courierBreakStarted"}, {"courier", id}},
+            clock.getSimulatedTimeMs());
+      }
+
+      const auto realBreak = std::chrono::duration<double, std::milli>(
+          static_cast<double>(config.fleet.breakMs) /
+          config.simulation.timeScale);
+      workCv.wait_for(lock, realBreak, [this] { return stopRequested; });
+
+      if (eventLogger) {
+        eventLogger->logEvent({{"event", "courierBreakEnded"}, {"courier", id}},
+                              clock.getSimulatedTimeMs());
+      }
+      deliveriesSinceBreak = 0;
+      state = CourierState::Idle;
+      lock.unlock();
+      // NUEVO: VARIANTE C - despertar al despachador sin sondeo.
+      if (capacitySignal)
+        capacitySignal->notifyChange();
+      lock.lock();
+    } else {
+      state = CourierState::Idle;
+    }
   }
 }
-
 
 bool Courier::processActiveOrder() {
   std::string restaurantId;
@@ -144,7 +173,6 @@ bool Courier::processActiveOrder() {
       return false;
     }
 
-
     const auto restaurantBreakdown = incidents::makeBreakdownPlan(
         config.orders.seed, id, orderId, "toRestaurant",
         config.incidents.breakdownProbability);
@@ -152,7 +180,6 @@ bool Courier::processActiveOrder() {
     if (!travelTo(restaurant->nodeId, &restaurantBreakdown)) {
       return false;
     }
-
 
     const long long preparationMs =
         preparationDurationMs(*restaurant, orderId, config.orders.seed);
@@ -183,7 +210,6 @@ bool Courier::processActiveOrder() {
       }
     }
 
-
     std::optional<PickupGate::Permit> pickupPermit;
 
     if (restaurantManager) {
@@ -194,7 +220,6 @@ bool Courier::processActiveOrder() {
         return false;
       }
     }
-
 
     {
       std::unique_lock<std::mutex> lock(stateMutex);
@@ -238,7 +263,6 @@ bool Courier::processActiveOrder() {
     pickupPermit.reset();
   }
 
-
   const auto customerBreakdown = incidents::makeBreakdownPlan(
       config.orders.seed, id, orderId, "toCustomer",
       config.incidents.breakdownProbability);
@@ -246,7 +270,6 @@ bool Courier::processActiveOrder() {
   if (!travelTo(deliveryNode, &customerBreakdown)) {
     return false;
   }
-
 
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -264,6 +287,8 @@ bool Courier::processActiveOrder() {
 
     finishedOrders.push_back(std::move(*activeOrder));
     activeOrder.reset();
+
+    ++deliveriesSinceBreak;
   }
 
   if (capacitySignal) {
@@ -272,7 +297,6 @@ bool Courier::processActiveOrder() {
 
   return true;
 }
-
 
 bool Courier::travelTo(const std::string &targetNode,
                        const incidents::BreakdownPlan *breakdown) {
@@ -320,12 +344,13 @@ bool Courier::travelTo(const std::string &targetNode,
       const double entireRealSeconds =
           (segment.distanceMeters / speedMetersPerSecond) /
           config.simulation.timeScale;
-      const double stopFraction = segment.distanceMeters > 0.0
-          ? std::clamp(distanceToTravel / segment.distanceMeters, 0.0, 1.0)
-          : 1.0;
-      motionInterval = MotionInterval{segment.from, segment.to,
-                                      std::chrono::steady_clock::now(),
-                                      entireRealSeconds, stopFraction, false};
+      const double stopFraction =
+          segment.distanceMeters > 0.0
+              ? std::clamp(distanceToTravel / segment.distanceMeters, 0.0, 1.0)
+              : 1.0;
+      motionInterval = MotionInterval{
+          segment.from,      segment.to,   std::chrono::steady_clock::now(),
+          entireRealSeconds, stopFraction, false};
 
       const bool interrupted =
           workCv.wait_for(lock, std::chrono::duration<double>(realSeconds),
@@ -338,7 +363,6 @@ bool Courier::travelTo(const std::string &targetNode,
 
       if (breakdownHere) {
         motionInterval->frozen = true;
-
 
         state = CourierState::Broken;
         everBroken = true;
@@ -370,7 +394,6 @@ bool Courier::travelTo(const std::string &targetNode,
   return true;
 }
 
-
 bool Courier::transferAllTo(Courier &recipient) {
 
   if (this == &recipient) {
@@ -384,7 +407,8 @@ bool Courier::transferAllTo(Courier &recipient) {
 
     if (stopRequested || recipient.stopRequested ||
         state != CourierState::Broken ||
-        recipient.state == CourierState::Broken) {
+        recipient.state == CourierState::Broken ||
+        recipient.state == CourierState::Resting) {
       return false;
     }
 
@@ -407,7 +431,6 @@ bool Courier::transferAllTo(Courier &recipient) {
       return false;
     }
 
-
     const auto duplicate = [&recipient](const Order &order) {
       return recipient.hasOrderIdLocked(order.orderId);
     };
@@ -428,7 +451,6 @@ bool Courier::transferAllTo(Courier &recipient) {
       }
     }
 
-
     std::deque<Order> staged;
 
     const std::size_t previousQueued = recipient.assignedOrders.size();
@@ -441,12 +463,10 @@ bool Courier::transferAllTo(Courier &recipient) {
 
     auto position = staged.begin();
 
-
     for (Order &order : recipient.assignedOrders) {
       *position = std::move(order);
       ++position;
     }
-
 
     if (activeOrder) {
       *position = std::move(*activeOrder);
@@ -463,13 +483,11 @@ bool Courier::transferAllTo(Courier &recipient) {
       ++position;
     }
 
-
     recipient.assignedOrders.swap(staged);
 
     activeOrder.reset();
     assignedOrders.clear();
     blockedOrders.clear();
-
 
     EventLogger *logger =
         eventLogger != nullptr ? eventLogger : recipient.eventLogger;
@@ -492,7 +510,6 @@ bool Courier::transferAllTo(Courier &recipient) {
     transferred = true;
   }
 
-
   if (transferred) {
 
     recipient.workCv.notify_one();
@@ -504,7 +521,6 @@ bool Courier::transferAllTo(Courier &recipient) {
 
   return transferred;
 }
-
 
 bool Courier::assignDestination(const std::string &nodeId) {
 
@@ -523,7 +539,6 @@ bool Courier::assignDestination(const std::string &nodeId) {
   return true;
 }
 
-
 bool Courier::hasOrderIdLocked(const std::string &orderId) const {
 
   if (activeOrder && activeOrder->orderId == orderId) {
@@ -539,7 +554,6 @@ bool Courier::hasOrderIdLocked(const std::string &orderId) const {
   return containsId(assignedOrders) || containsId(blockedOrders) ||
          containsId(finishedOrders);
 }
-
 
 bool Courier::tryAssignOrder(Order &&order,
                              const std::function<void()> &onAssigned) {
@@ -560,7 +574,8 @@ bool Courier::tryAssignOrder(Order &&order,
   {
     std::lock_guard<std::mutex> lock(stateMutex);
 
-    if (stopRequested || state == CourierState::Broken) {
+    if (stopRequested || state == CourierState::Broken ||
+        state == CourierState::Resting) {
       return false;
     }
 
@@ -596,7 +611,6 @@ bool Courier::tryAssignOrder(Order &&order,
   return true;
 }
 
-
 void Courier::finishPendingLocked() {
 
   if (activeOrder) {
@@ -620,7 +634,6 @@ void Courier::finishPendingLocked() {
     blockedOrders.pop_front();
   }
 }
-
 
 std::size_t Courier::getReservedCount() const {
   std::lock_guard<std::mutex> lock(stateMutex);
@@ -654,7 +667,6 @@ Courier::getAssignedOrderState(const std::string &orderId) const {
   return std::nullopt;
 }
 
-
 void Courier::requestStop() {
   {
     std::lock_guard<std::mutex> lock(stateMutex);
@@ -663,7 +675,6 @@ void Courier::requestStop() {
 
   workCv.notify_all();
 }
-
 
 std::string Courier::getId() const { return id; }
 

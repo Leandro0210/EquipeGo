@@ -191,7 +191,9 @@ QuoteBatch Dispatcher::quoteCandidates(const Order &order) const {
 
   for (std::size_t i = 0; i < fleet.size(); ++i) {
     Courier &courier = fleet.at(i);
-    if (courier.getState() == CourierState::Broken) {
+    // NUEVO: VARIANTE C - no gastar cotizaciones en motos descansando.
+    const CourierState state = courier.getState();
+    if (state == CourierState::Broken || state == CourierState::Resting) {
       continue;
     }
     if (courier.getReservedCount() >=

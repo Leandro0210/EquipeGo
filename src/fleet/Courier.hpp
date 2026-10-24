@@ -23,7 +23,7 @@
 
 class EventLogger;
 
-enum class CourierState { Idle, Moving, Broken };
+enum class CourierState { Idle, Moving, Broken, Resting };
 
 struct CourierOrderSnapshot {
   std::string orderId;
@@ -35,7 +35,7 @@ struct CourierOrderSnapshot {
 struct CourierMotionSnapshot {
   std::string from;
   std::string to;
-  double progress = 0.0;  
+  double progress = 0.0;
 };
 
 struct CourierSnapshot {
@@ -67,6 +67,8 @@ private:
   std::string currentNode;
   CourierState state = CourierState::Idle;
   bool everBroken = false;
+
+  std::size_t deliveriesSinceBreak = 0;
 
   struct MotionInterval {
     std::string from;
@@ -135,7 +137,8 @@ public:
     if (motionInterval) {
       const MotionInterval &m = *motionInterval;
       const double elapsed = std::chrono::duration<double>(
-          std::chrono::steady_clock::now() - m.started).count();
+                                 std::chrono::steady_clock::now() - m.started)
+                                 .count();
       const double fraction = m.frozen || m.wholeSegmentSeconds <= 0.0
                                   ? m.stopFraction
                                   : std::clamp(elapsed / m.wholeSegmentSeconds,
@@ -143,8 +146,7 @@ public:
       snapshot.motion = CourierMotionSnapshot{m.from, m.to, fraction};
     }
     snapshot.reservedCount =
-        assignedOrders.size() + blockedOrders.size() +
-        (activeOrder ? 1u : 0u);
+        assignedOrders.size() + blockedOrders.size() + (activeOrder ? 1u : 0u);
 
     const auto copyOrder = [](const Order &order) {
       CourierOrderSnapshot data;
