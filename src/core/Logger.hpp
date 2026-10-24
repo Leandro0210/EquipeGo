@@ -14,10 +14,10 @@ struct LiveEventStats {
   std::size_t breakdowns = 0;
   std::size_t reassigned = 0;
 
+  std::size_t breaks = 0;
+
   std::size_t inProgress() const noexcept {
-    return created >= delivered + rejected
-               ? created - delivered - rejected
-               : 0;
+    return created >= delivered + rejected ? created - delivered - rejected : 0;
   }
 };
 

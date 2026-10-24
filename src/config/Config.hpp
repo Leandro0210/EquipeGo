@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 struct MapBounds {
   double north = 0.0;
   double south = 0.0;
@@ -15,18 +14,18 @@ struct MapBounds {
 };
 
 struct MapConfig {
-  std::string imagePath;    
-  std::string resolvedPath; 
+  std::string imagePath;
+  std::string resolvedPath;
   std::string attribution;
   MapBounds bounds;
-  cv::Mat image; 
+  cv::Mat image;
 };
 
 struct Node {
   std::string id;
   double lat = 0.0;
   double lon = 0.0;
-  cv::Point pixelPos{0, 0}; 
+  cv::Point pixelPos{0, 0};
 };
 
 struct Street {
@@ -34,7 +33,7 @@ struct Street {
   std::string from;
   std::string to;
   bool oneWay = false;
-  double lengthMeters = 0.0; 
+  double lengthMeters = 0.0;
 };
 
 struct Restaurant {
@@ -51,6 +50,9 @@ struct FleetConfig {
   int bagCapacity = 1;
   double speedKmh = 30.0;
   std::string startNode;
+
+  int breakAfterDeliveries = 0;
+  int breakMs = 0;
 };
 
 struct OrdersConfig {
@@ -93,4 +95,4 @@ cv::Point latLonToPixel(double lat, double lon, const MapBounds &bounds,
 
 bool loadAndValidateConfig(int argc, char *argv[], SimulationConfig &outConfig);
 
-#endif 
+#endif

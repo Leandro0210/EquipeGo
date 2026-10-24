@@ -4,10 +4,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits> // NUEVO: VARIANTE C - comprobar rango de int
 #include <nlohmann/json.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <unordered_set>
-
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -91,7 +91,7 @@ bool requireArray(const json &parent, const std::string &key,
   return true;
 }
 
-} 
+} // namespace
 
 cv::Point latLonToPixel(double lat, double lon, const MapBounds &bounds,
                         int width, int height) {
@@ -377,6 +377,32 @@ bool loadAndValidateConfig(int argc, char *argv[],
   outConfig.fleet.bagCapacity = jFleet["bagCapacity"].get<int>();
   outConfig.fleet.speedKmh = jFleet["speedKmh"].get<double>();
   outConfig.fleet.startNode = jFleet["startNode"].get<std::string>();
+
+  const auto parseOptionalNonNegativeInt = [&](const char *key, int &value) {
+    const auto it = jFleet.find(key);
+    if (it == jFleet.end())
+      return true;
+    if (!it->is_number_integer() || *it < 0 ||
+        *it > std::numeric_limits<int>::max()) {
+      std::cerr << "Invalid config: fleet." << key
+                << " must be an integer in [0, INT_MAX].\n";
+      return false;
+    }
+    value = it->get<int>();
+    return true;
+  };
+  if (!parseOptionalNonNegativeInt("breakAfterDeliveries",
+                                   outConfig.fleet.breakAfterDeliveries) ||
+      !parseOptionalNonNegativeInt("breakMs", outConfig.fleet.breakMs)) {
+    return false;
+  }
+
+  if (outConfig.fleet.breakAfterDeliveries > 0 &&
+      outConfig.fleet.breakMs <= 0) {
+    std::cerr << "Invalid config: fleet.breakMs must be > 0 when "
+                 "fleet.breakAfterDeliveries > 0.\n";
+    return false;
+  }
 
   if (outConfig.fleet.couriers < 1 || outConfig.fleet.bagCapacity < 1 ||
       outConfig.fleet.speedKmh <= 0.0) {

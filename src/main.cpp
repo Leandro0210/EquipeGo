@@ -10,11 +10,11 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cerrno>
+#include <chrono>
 #include <climits>
-#include <csignal>
 #include <cmath>
+#include <csignal>
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
@@ -38,19 +38,20 @@
 #define EQUIPEGO_HAS_POSIX_SIGNALS 0
 #endif
 
-
 struct EventAudit {
   std::size_t created = 0;
   std::size_t delivered = 0;
   std::size_t rejected = 0;
   std::size_t reassigned = 0;
   std::size_t breakdowns = 0;
+
+  std::size_t breaks = 0;
+  std::unordered_map<std::string, std::size_t> breaksPerCourier;
   std::size_t stopping = 0;
   long long deliveryDurationSumMs = 0;
   long long maxDeliveryMs = 0;
   std::unordered_map<std::string, std::size_t> deliveredPerCourier;
 };
-
 
 EventAudit auditEventLog(const std::string &filename,
                          const std::vector<std::string> &courierIds) {
@@ -64,12 +65,16 @@ EventAudit auditEventLog(const std::string &filename,
   for (const std::string &courier : courierIds) {
     validCouriers.insert(courier);
     audit.deliveredPerCourier[courier] = 0;
+    audit.breaksPerCourier[courier] = 0;
   }
 
   std::unordered_map<std::string, long long> creationTimes;
   std::unordered_map<std::string, long long> lastTimes;
   std::unordered_set<std::string> deliveredIds;
   std::unordered_set<std::string> rejectedIds;
+
+  std::unordered_set<std::string> restingCouriers;
+  std::unordered_map<std::string, long long> breakStartedAt;
 
   std::string line;
   std::size_t lineNumber = 0;
@@ -120,8 +125,16 @@ EventAudit auditEventLog(const std::string &filename,
       ++audit.created;
     } else if (name == "orderAssigned") {
       if (creationTimes.find(orderId) == creationTimes.end() ||
-          !event.contains("courier")) {
+          !event.contains("courier") || !event["courier"].is_string()) {
         throw std::runtime_error("orderAssigned invalido: " + orderId);
+      }
+
+      const std::string assignedCourier =
+          event.at("courier").get<std::string>();
+      if (validCouriers.count(assignedCourier) == 0 ||
+          restingCouriers.count(assignedCourier) != 0) {
+        throw std::runtime_error(
+            "orderAssigned a courier desconocido o descansando");
       }
     } else if (name == "pickupStarted" || name == "orderPickedUp") {
       if (creationTimes.find(orderId) == creationTimes.end() ||
@@ -151,8 +164,7 @@ EventAudit auditEventLog(const std::string &filename,
     } else if (name == "orderRejected") {
       const std::string reason = event.at("reason").get<std::string>();
       const bool validReason = reason == "queueFull" ||
-                               reason == "unreachable" ||
-                               reason == "noCourier";
+                               reason == "unreachable" || reason == "noCourier";
       if (!validReason || creationTimes.count(orderId) == 0 ||
           deliveredIds.count(orderId) != 0 ||
           !rejectedIds.insert(orderId).second) {
@@ -168,11 +180,36 @@ EventAudit auditEventLog(const std::string &filename,
     } else if (name == "orderReassigned") {
       const std::string from = event.at("from").get<std::string>();
       const std::string to = event.at("to").get<std::string>();
+
       if (creationTimes.count(orderId) == 0 || validCouriers.count(from) == 0 ||
-          validCouriers.count(to) == 0 || from == to) {
+          validCouriers.count(to) == 0 || from == to ||
+          restingCouriers.count(to) != 0) {
         throw std::runtime_error("Reasignacion invalida: " + orderId);
       }
       ++audit.reassigned;
+
+    } else if (name == "courierBreakStarted") {
+      if (!event.contains("courier") || !event["courier"].is_string()) {
+        throw std::runtime_error("courierBreakStarted sin courier");
+      }
+      const std::string courier = event.at("courier").get<std::string>();
+      if (validCouriers.count(courier) == 0 ||
+          !restingCouriers.insert(courier).second) {
+        throw std::runtime_error("Inicio de descanso invalido: " + courier);
+      }
+      breakStartedAt[courier] = time;
+      ++audit.breaks;
+      ++audit.breaksPerCourier[courier];
+    } else if (name == "courierBreakEnded") {
+      if (!event.contains("courier") || !event["courier"].is_string()) {
+        throw std::runtime_error("courierBreakEnded sin courier");
+      }
+      const std::string courier = event.at("courier").get<std::string>();
+      if (restingCouriers.erase(courier) != 1 ||
+          time < breakStartedAt.at(courier)) {
+        throw std::runtime_error("Fin de descanso invalido: " + courier);
+      }
+      breakStartedAt.erase(courier);
     } else if (name == "simulationStopping") {
       ++audit.stopping;
       stoppingSeen = true;
@@ -181,12 +218,14 @@ EventAudit auditEventLog(const std::string &filename,
     }
   }
 
+  if (!restingCouriers.empty()) {
+    throw std::runtime_error("Descanso sin courierBreakEnded");
+  }
   if (!input.eof() || audit.stopping != 1) {
     throw std::runtime_error("JSONL incompleto o sin simulationStopping");
   }
   return audit;
 }
-
 
 namespace {
 
@@ -226,7 +265,7 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
       options.display = DisplayMode::Headless;
     } else
 #endif
-    if (argument == "--log" && i + 1 < argc) {
+        if (argument == "--log" && i + 1 < argc) {
       options.logPath = argv[++i];
       if (options.logPath.empty()) {
         std::cerr << "Ruta de log vacia\n";
@@ -271,7 +310,6 @@ bool readOptions(int argc, char *argv[], RunOptions &options) {
   return true;
 }
 
-
 static_assert(std::atomic<bool>::is_always_lock_free,
               "El indicador de apagado debe ser lock-free");
 std::atomic<bool> gSignalStopRequested{false};
@@ -286,12 +324,14 @@ extern "C" void handleStopSignal(int) noexcept {
   if (descriptor >= 0) {
     const unsigned char wake = 1;
     const ssize_t ignored = ::write(descriptor, &wake, sizeof(wake));
-    (void)ignored; 
+    (void)ignored;
   }
   errno = originalErrno;
 }
 #else
-extern "C" void handleStopSignal(int) noexcept { gSignalStopRequested.store(true, std::memory_order_relaxed); }
+extern "C" void handleStopSignal(int) noexcept {
+  gSignalStopRequested.store(true, std::memory_order_relaxed);
+}
 #endif
 
 class SignalStopController {
@@ -313,7 +353,7 @@ public:
     }
     gSignalWakeWriteFd = static_cast<std::sig_atomic_t>(writeFd);
 
-    struct sigaction handlerAction {};
+    struct sigaction handlerAction{};
     handlerAction.sa_handler = handleStopSignal;
     ::sigemptyset(&handlerAction.sa_mask);
     handlerAction.sa_flags = 0;
@@ -343,8 +383,10 @@ public:
 
   ~SignalStopController() {
 #if EQUIPEGO_HAS_POSIX_SIGNALS
-    if (termInstalled) ::sigaction(SIGTERM, &previousTerm, nullptr);
-    if (intInstalled) ::sigaction(SIGINT, &previousInt, nullptr);
+    if (termInstalled)
+      ::sigaction(SIGTERM, &previousTerm, nullptr);
+    if (intInstalled)
+      ::sigaction(SIGINT, &previousInt, nullptr);
     gSignalWakeWriteFd = -1;
     closePipe();
 #else
@@ -353,7 +395,9 @@ public:
 #endif
   }
 
-  bool stopRequested() const noexcept { return gSignalStopRequested.load(std::memory_order_relaxed); }
+  bool stopRequested() const noexcept {
+    return gSignalStopRequested.load(std::memory_order_relaxed);
+  }
 
   void waitUntil(std::chrono::steady_clock::time_point deadline) const {
 #if EQUIPEGO_HAS_POSIX_SIGNALS
@@ -361,15 +405,16 @@ public:
       int timeoutMs = -1;
       if (deadline != std::chrono::steady_clock::time_point::max()) {
         const auto now = std::chrono::steady_clock::now();
-        if (now >= deadline) return;
+        if (now >= deadline)
+          return;
         const auto remaining =
-            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now)
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline -
+                                                                  now)
                 .count();
-        timeoutMs = static_cast<int>(remaining >= INT_MAX - 1
-                                         ? INT_MAX
-                                         : remaining + 1);
+        timeoutMs = static_cast<int>(remaining >= INT_MAX - 1 ? INT_MAX
+                                                              : remaining + 1);
       }
-      struct pollfd descriptor {};
+      struct pollfd descriptor{};
       descriptor.fd = readFd;
       descriptor.events = POLLIN;
       const int result = ::poll(&descriptor, 1, timeoutMs);
@@ -381,10 +426,9 @@ public:
       }
     }
 #else
-    while (!stopRequested() &&
-           std::chrono::steady_clock::now() < deadline) {
+    while (!stopRequested() && std::chrono::steady_clock::now() < deadline) {
       const auto next = std::min(deadline, std::chrono::steady_clock::now() +
-                                              std::chrono::milliseconds(50));
+                                               std::chrono::milliseconds(50));
       std::this_thread::sleep_until(next);
     }
 #endif
@@ -396,12 +440,14 @@ private:
   int writeFd = -1;
   bool intInstalled = false;
   bool termInstalled = false;
-  struct sigaction previousInt {};
-  struct sigaction previousTerm {};
+  struct sigaction previousInt{};
+  struct sigaction previousTerm{};
 
   void closePipe() noexcept {
-    if (readFd >= 0) ::close(readFd);
-    if (writeFd >= 0) ::close(writeFd);
+    if (readFd >= 0)
+      ::close(readFd);
+    if (writeFd >= 0)
+      ::close(writeFd);
     readFd = -1;
     writeFd = -1;
   }
@@ -412,22 +458,26 @@ private:
 #endif
 };
 
-} 
-
+} // namespace
 
 int main(int argc, char *argv[]) {
   RunOptions options;
-  if (!readOptions(argc, argv, options)) return 1;
+  if (!readOptions(argc, argv, options))
+    return 1;
 
   char *configArgs[] = {argv[0], argv[1]};
   SimulationConfig config;
-  if (!loadAndValidateConfig(2, configArgs, config)) return 1;
-  if (options.hasLogPath) config.logFilePath = options.logPath;
+  if (!loadAndValidateConfig(2, configArgs, config))
+    return 1;
+  if (options.hasLogPath)
+    config.logFilePath = options.logPath;
 
 #ifdef EQUIPEGO_BENCHMARK_CLI
   const bool showGui = options.display != DisplayMode::Headless;
-  if (options.hasScale) config.simulation.timeScale = options.scale;
-  if (options.hasDuration) config.simulation.durationS = options.duration;
+  if (options.hasScale)
+    config.simulation.timeScale = options.scale;
+  if (options.hasDuration)
+    config.simulation.durationS = options.duration;
 #else
   const bool showGui = true;
 #endif
@@ -469,30 +519,33 @@ int main(int argc, char *argv[]) {
 
     std::thread producerThread(&OrderProducer::run, &producer);
 
-    const auto deadline = config.simulation.durationS > 0
-        ? startTime + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                          std::chrono::duration<double>(
-                              static_cast<double>(config.simulation.durationS) /
-                              config.simulation.timeScale))
-        : std::chrono::steady_clock::time_point::max();
+    const auto deadline =
+        config.simulation.durationS > 0
+            ? startTime +
+                  std::chrono::duration_cast<
+                      std::chrono::steady_clock::duration>(
+                      std::chrono::duration<double>(
+                          static_cast<double>(config.simulation.durationS) /
+                          config.simulation.timeScale))
+            : std::chrono::steady_clock::time_point::max();
 
     if (dashboard) {
       while (!signals.stopRequested() &&
              std::chrono::steady_clock::now() < deadline) {
         bool keepOpen = false;
         try {
-          keepOpen = dashboard->frame(
-              fleet, logger.snapshotStats(), clock.getSimulatedTimeMs());
+          keepOpen = dashboard->frame(fleet, logger.snapshotStats(),
+                                      clock.getSimulatedTimeMs());
         } catch (const std::exception &error) {
           std::cerr << "Aviso DP9.1 (OpenCV): " << error.what() << '\n';
         }
-        if (!keepOpen) break;
+        if (!keepOpen)
+          break;
       }
       dashboard->close();
     } else {
       signals.waitUntil(deadline);
     }
-
 
     producer.requestStop();
     producerThread.join();
@@ -559,7 +612,9 @@ int main(int argc, char *argv[]) {
     if (audit.created != createdCount || audit.delivered != deliveredCount ||
         audit.rejected != rejectedCount ||
         audit.reassigned != fleet.getRescuedOrderCount() ||
-        audit.breakdowns != fleet.getBreakdownCount()) {
+        audit.breakdowns != fleet.getBreakdownCount() ||
+
+        audit.breaks != logger.snapshotStats().breaks) {
       throw std::logic_error("Los eventos JSONL no coinciden "
                              "con los contadores del simulador");
     }
@@ -573,10 +628,9 @@ int main(int argc, char *argv[]) {
     }
 
     const double avgDeliveryMs =
-        audit.delivered > 0
-            ? static_cast<double>(audit.deliveryDurationSumMs) /
-                  static_cast<double>(audit.delivered)
-            : 0.0;
+        audit.delivered > 0 ? static_cast<double>(audit.deliveryDurationSumMs) /
+                                  static_cast<double>(audit.delivered)
+                            : 0.0;
     nlohmann::json perCourier = nlohmann::json::object();
     std::size_t sumDeliveredPerCourier = 0;
     for (const std::string &courier : courierIds) {
@@ -588,12 +642,26 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("La suma por repartidor no coincide");
     }
 
+    nlohmann::json perCourierBreaks = nlohmann::json::object();
+    std::size_t sumBreaksPerCourier = 0;
+    for (const std::string &courier : courierIds) {
+      const std::size_t breaks = audit.breaksPerCourier.at(courier);
+      perCourierBreaks[courier] = breaks;
+      sumBreaksPerCourier += breaks;
+    }
+    if (sumBreaksPerCourier != audit.breaks) {
+      throw std::logic_error("La suma de descansos por courier no coincide");
+    }
+
     const nlohmann::json summary = {{"created", audit.created},
                                     {"delivered", audit.delivered},
                                     {"rejected", audit.rejected},
                                     {"pending", pendingFromEvents},
                                     {"reassigned", audit.reassigned},
                                     {"breakdowns", audit.breakdowns},
+
+                                    {"breaks", audit.breaks},
+                                    {"breaksPerCourier", perCourierBreaks},
                                     {"avgDeliveryMs", avgDeliveryMs},
                                     {"maxDeliveryMs", audit.maxDeliveryMs},
                                     {"deliveredPerCourier", perCourier}};

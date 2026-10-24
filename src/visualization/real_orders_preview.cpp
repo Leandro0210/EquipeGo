@@ -118,6 +118,9 @@ std::vector<VisualCourier> takeSamples(
     const auto &s = item.snapshot;
     if (s.state == CourierState::Broken) {
       item.phase = "AVERIADA";
+    // NUEVO: VARIANTE C - reflejar el nuevo estado también en el preview.
+    } else if (s.state == CourierState::Resting) {
+      item.phase = "DESCANSANDO";
     } else if (s.active) {
       const auto &o = *s.active;
       if (o.state == OrderState::PickedUp) {
