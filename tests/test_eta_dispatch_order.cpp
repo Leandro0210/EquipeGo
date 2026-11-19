@@ -42,6 +42,19 @@ int main() {
   EXIGIR(v[1].courierIndex == 4);
   EXIGIR(v[2].courierIndex == 8);
 
+  // La rubrica exige (ETA, courierId): c10 es menor que c2
+  // lexicograficamente, aunque el indice numerico 10 sea mayor que 2.
+  v = {{2, "c2", 1.0}, {11, "c11", 1.0}, {10, "c10", 1.0}, {3, "c3", 2.0}};
+  ordenarCotizacionesPorReduccion(v);
+  EXIGIR(v[0].courierId == "c10" && v[0].courierIndex == 10);
+  EXIGIR(v[1].courierId == "c11" && v[2].courierId == "c2");
+  EXIGIR(v[3].courierId == "c3");
+
+  // El ID no necesita coincidir con el indice de posicion del Fleet.
+  v = {{70, "z", 2.0}, {1, "a", 2.0}, {8, "b", 2.0}};
+  ordenarCotizacionesPorReduccion(v);
+  EXIGIR(v[0].courierId == "a" && v[1].courierId == "b" && v[2].courierId == "z");
+
   v = {{8, "c8", -1.0}, {9, "c9", std::numeric_limits<double>::infinity()},
        {5, "c5", std::numeric_limits<double>::quiet_NaN()}, {1, "c1", 2.0}};
   ordenarCotizacionesPorReduccion(v);
@@ -59,6 +72,7 @@ int main() {
     std::sort(esperado.begin(), esperado.end(), [](const auto& a, const auto& b) {
       if (a.etaSimulatedSeconds != b.etaSimulatedSeconds)
         return a.etaSimulatedSeconds < b.etaSimulatedSeconds;
+      if (a.courierId != b.courierId) return a.courierId < b.courierId;
       return a.courierIndex < b.courierIndex;
     });
     ordenarCotizacionesPorReduccion(datos);

@@ -7,7 +7,9 @@
 
 namespace equipego::analytics {
 
-// Cada valor se compara de forma exacta: menor ETA, luego menor courierIndex.
+// Backend generico: menor ETA y luego menor indice numerico.
+// En el dispatcher, el indice recibido es el rango lexicografico de courierId
+// (prepararEtaPorCourierId); el benchmark aislado conserva indices directos.
 // CPU y GPU reciben el mismo vector, incluso si hay entradas invalidas.
 struct ResultadoReduccionGpu {
   std::optional<EtaCandidato> mejor;

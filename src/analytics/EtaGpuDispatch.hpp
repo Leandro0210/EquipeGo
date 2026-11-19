@@ -26,7 +26,7 @@ enum class EstadoEleccionGpu08 {
 };
 
 // Se preserva la ordenacion de respaldo: si el primero no acepta la orden,
-// el dispatcher intenta los otros por ETA ascendente e indice ascendente.
+// el dispatcher intenta los otros por (ETA, courierId).
 // Una GPU lenta nunca obliga a bloquear pasado el deadline real indicado.
 template <class Quote>
 EstadoEleccionGpu08 ordenarConGpu08Ocpu(
@@ -51,15 +51,13 @@ EstadoEleccionGpu08 ordenarConGpu08Ocpu(
     return EstadoEleccionGpu08::SinTiempo;
   }
 
-  std::vector<EtaCandidato> entrada;
-  entrada.reserve(cotizaciones.size());
-  for (const auto& q : cotizaciones) {
-    entrada.push_back({q.courierIndex, q.etaSimulatedSeconds, true});
-  }
-  const auto referencia = reducirMejorEtaCPU(entrada);
+  // Cada courierId obtiene un rango lexicografico; la GPU compara
+  // (ETA, rango) y recuperamos la cotizacion real al recibir el ganador.
+  auto entradas = prepararEtaPorCourierId(cotizaciones);
+  const auto referencia = reducirMejorEtaCPU(entradas.candidatos);
 
   try {
-    auto futuro = enviar(std::move(entrada));
+    auto futuro = enviar(std::move(entradas.candidatos));
     if (!futuro.valid()) {
       throw std::runtime_error("Futuro GPU no valido");
     }
@@ -80,24 +78,15 @@ EstadoEleccionGpu08 ordenarConGpu08Ocpu(
       return EstadoEleccionGpu08::DiferenciaCpuGpu;
     }
 
-    // Seleccionamos explicitamente el indice retornado por el kernel GPU.
-    // Ordenar el resto preserva el fallback ante cambios concurrentes de flota.
-    auto it = std::find_if(cotizaciones.begin(), cotizaciones.end(),
-                           [&gpu](const Quote& q) {
-      return q.courierIndex == gpu.mejor->courierIndex &&
-             q.etaSimulatedSeconds == gpu.mejor->etaSimulatedSeconds;
-    });
-    if (it == cotizaciones.end()) {
+    // El indice retornado por GPU es un RANGO DE ID, no un indice de flota.
+    if (gpu.mejor->courierIndex >= entradas.posicionPorRango.size()) {
       ordenarCotizacionesPorReduccion(cotizaciones);
       return EstadoEleccionGpu08::DiferenciaCpuGpu;
     }
-    std::iter_swap(cotizaciones.begin(), it);
+    const auto posicion = entradas.posicionPorRango[gpu.mejor->courierIndex];
+    std::iter_swap(cotizaciones.begin(), cotizaciones.begin() + posicion);
     std::sort(cotizaciones.begin() + 1, cotizaciones.end(),
-              [](const Quote& a, const Quote& b) {
-      if (a.etaSimulatedSeconds != b.etaSimulatedSeconds)
-        return a.etaSimulatedSeconds < b.etaSimulatedSeconds;
-      return a.courierIndex < b.courierIndex;
-    });
+              etaMenorPorCourierId<Quote>);
     return EstadoEleccionGpu08::Usada;
   } catch (...) {
     ordenarCotizacionesPorReduccion(cotizaciones);
