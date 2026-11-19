@@ -1,5 +1,6 @@
 #include "analytics/DeliveryHistogramGpu.hpp"
 
+#include <memory>
 #include <stdexcept>
 #include <utility>
 
@@ -19,15 +20,31 @@ PropietarioGpuHistograma::~PropietarioGpuHistograma() {
 
 std::future<ResultadoHistogramaGpu> PropietarioGpuHistograma::enviar(
     std::vector<long long> duracionesMs, VarianteHistogramaGpu variante) {
-  std::packaged_task<ResultadoHistogramaGpu()> tarea(
+  auto tarea = std::make_shared<std::packaged_task<ResultadoHistogramaGpu()>>(
       [datos = std::move(duracionesMs), variante]() {
         return ejecutarHistogramaEnGpu(datos, variante);
       });
-  auto futuro = tarea.get_future();
+  auto futuro = tarea->get_future();
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (detener_) throw std::runtime_error("Cola CUDA detenida");
-    cola_.push(std::move(tarea));
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
+std::future<ResultadoReduccionGpu> PropietarioGpuHistograma::enviarEta(
+    std::vector<EtaCandidato> candidatos) {
+  auto tarea = std::make_shared<std::packaged_task<ResultadoReduccionGpu()>>(
+      [datos = std::move(candidatos)] {
+        return ejecutarReduccionEtaEnGpu(datos);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
   }
   condicion_.notify_one();
   return futuro;
@@ -35,7 +52,7 @@ std::future<ResultadoHistogramaGpu> PropietarioGpuHistograma::enviar(
 
 void PropietarioGpuHistograma::ejecutarCola() {
   while (true) {
-    std::packaged_task<ResultadoHistogramaGpu()> tarea;
+    std::function<void()> tarea;
     {
       std::unique_lock<std::mutex> lock(mutex_);
       condicion_.wait(lock, [this] { return detener_ || !cola_.empty(); });

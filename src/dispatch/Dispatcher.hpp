@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "analytics/EtaGpuDispatch.hpp"
 #include "config/Config.hpp"
 #include "fleet/Fleet.hpp"
 #include "map/RoadNetwork.hpp"
@@ -46,18 +47,35 @@ private:
 
   QuoteCalculator calculator;
   std::unique_ptr<QuoteExecutor> executor;
+  equipego::analytics::EnviarReduccionGpu08 gpuEtaSubmitter;
+  std::size_t gpuMinQuotes = 128;
 
   std::atomic<bool> stopRequested{false};
 
   std::atomic<std::size_t> assignedCount{0};
   std::atomic<std::size_t> rejectedCount{0};
   std::atomic<std::size_t> pendingCount{0};
+  std::atomic<std::size_t> gpu08Intentos{0};
+  std::atomic<std::size_t> gpu08Usos{0};
+  std::atomic<std::size_t> gpu08Timeouts{0};
+  std::atomic<std::size_t> gpu08Errores{0};
+  std::atomic<std::size_t> gpu08Diferencias{0};
 
 public:
   Dispatcher(const SimulationConfig &config, const RoadNetwork &roadNetwork,
              Fleet &fleet, QuoteCalculator calculator = {});
 
   ~Dispatcher();
+
+  // Configurar antes de iniciar el hilo Dispatcher::run.
+  void setGpuEtaSubmitter(
+      equipego::analytics::EnviarReduccionGpu08 submitter,
+      std::size_t minimoCandidatos);
+  std::size_t getGpu08Intentos() const { return gpu08Intentos.load(); }
+  std::size_t getGpu08Usos() const { return gpu08Usos.load(); }
+  std::size_t getGpu08Timeouts() const { return gpu08Timeouts.load(); }
+  std::size_t getGpu08Errores() const { return gpu08Errores.load(); }
+  std::size_t getGpu08Diferencias() const { return gpu08Diferencias.load(); }
 
   Dispatcher(const Dispatcher &) = delete;
   Dispatcher &operator=(const Dispatcher &) = delete;

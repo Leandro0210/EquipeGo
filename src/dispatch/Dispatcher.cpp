@@ -1,3 +1,4 @@
+#include "analytics/EtaReduction.hpp"
 #include "dispatch/Dispatcher.hpp"
 #include "dispatch/SharedDistanceCache.hpp"
 
@@ -161,6 +162,16 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
   executor = std::make_unique<QuoteExecutor>(workerCount);
 }
 
+void Dispatcher::setGpuEtaSubmitter(
+    equipego::analytics::EnviarReduccionGpu08 submitter,
+    std::size_t minimoCandidatos) {
+  if (!submitter || minimoCandidatos == 0) {
+    throw std::invalid_argument("Configuracion GPU08 no valida");
+  }
+  gpuEtaSubmitter = std::move(submitter);
+  gpuMinQuotes = minimoCandidatos;
+}
+
 Dispatcher::~Dispatcher() = default;
 
 
@@ -257,6 +268,33 @@ QuoteBatch Dispatcher::quoteCandidates(const Order &order) const {
 std::optional<std::string> Dispatcher::assignBestCourier(Order &order) const {
   QuoteBatch batch = quoteCandidates(order);
 
+  // Feature 08: elegir el primer candidato mediante argmin determinista.
+  // No confiar en la instantanea al asignar: tryAssignOrder revalida estado.
+  std::vector<equipego::analytics::EtaCandidato> candidatos;
+  candidatos.reserve(batch.quotes.size());
+  for (const EtaQuote &quote : batch.quotes) {
+    candidatos.push_back({quote.courierIndex, quote.etaSimulatedSeconds, true});
+  }
+
+  const auto mejor = equipego::analytics::reducirMejorEtaCPU(candidatos);
+  if (mejor) {
+    auto elegido = std::find_if(
+        batch.quotes.begin(), batch.quotes.end(),
+        [&mejor](const EtaQuote &quote) {
+          return quote.courierIndex == mejor->courierIndex &&
+                 quote.etaSimulatedSeconds == mejor->etaSimulatedSeconds;
+        });
+    if (elegido != batch.quotes.end()) {
+      Courier &courier = fleet.at(elegido->courierIndex);
+      if (courier.tryAssignOrder(std::move(order))) {
+        return elegido->courierId;
+      }
+      // Si el courier ya no esta disponible, conservar los reintentos.
+      batch.quotes.erase(elegido);
+    }
+  }
+
+  // Ruta de respaldo identica a la original para los candidatos restantes.
   std::sort(batch.quotes.begin(), batch.quotes.end(),
             [](const EtaQuote &a, const EtaQuote &b) {
               if (a.etaSimulatedSeconds != b.etaSimulatedSeconds) {

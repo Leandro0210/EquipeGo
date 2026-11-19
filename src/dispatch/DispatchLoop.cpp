@@ -1,3 +1,4 @@
+#include "analytics/EtaGpuDispatch.hpp"
 #include "dispatch/Dispatcher.hpp"
 
 #include "core/Clock.hpp"
@@ -92,16 +93,22 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
       try {
 
+        // CPU QuoteCalculator conserva su plazo habitual. GPU solo usa el
+        // tiempo REAL restante del mismo quoteTimeoutMs y, si vence, CPU.
+        const auto limiteGpu08 = std::chrono::steady_clock::now() +
+            std::chrono::milliseconds(config.dispatch.quoteTimeoutMs);
         QuoteBatch batch = quoteCandidates(order);
 
-        std::sort(batch.quotes.begin(), batch.quotes.end(),
-                  [](const EtaQuote &a, const EtaQuote &b) {
-                    if (a.etaSimulatedSeconds != b.etaSimulatedSeconds) {
-                      return a.etaSimulatedSeconds < b.etaSimulatedSeconds;
-                    }
-
-                    return a.courierIndex < b.courierIndex;
-                  });
+        // Feature 08: argmin CPU para elegir primer courier;
+        // todos los demas se mantienen ordenados para reintentos.
+        const auto estadoGpu08 = equipego::analytics::ordenarConGpu08Ocpu(
+            batch.quotes, gpuEtaSubmitter, limiteGpu08, gpuMinQuotes);
+        using EstadoGpu08 = equipego::analytics::EstadoEleccionGpu08;
+        if (estadoGpu08 != EstadoGpu08::SoloCpu) ++gpu08Intentos;
+        if (estadoGpu08 == EstadoGpu08::Usada) ++gpu08Usos;
+        if (estadoGpu08 == EstadoGpu08::SinTiempo) ++gpu08Timeouts;
+        if (estadoGpu08 == EstadoGpu08::FalloGpu) ++gpu08Errores;
+        if (estadoGpu08 == EstadoGpu08::DiferenciaCpuGpu) ++gpu08Diferencias;
 
         for (const EtaQuote &quote : batch.quotes) {
 

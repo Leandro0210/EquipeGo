@@ -1,8 +1,10 @@
 #pragma once
 
 #include "analytics/DeliveryHistogram.hpp"
+#include "analytics/EtaReductionGpu.hpp"
 
 #include <condition_variable>
+#include <functional>
 #include <future>
 #include <mutex>
 #include <queue>
@@ -38,12 +40,16 @@ class PropietarioGpuHistograma {
       std::vector<long long> duracionesMs,
       VarianteHistogramaGpu variante = VarianteHistogramaGpu::CompartidaPrivada);
 
+  // El mismo hilo propietario atiende Histogram 07 y Reduction 08.
+  std::future<ResultadoReduccionGpu> enviarEta(
+      std::vector<EtaCandidato> candidatos);
+
  private:
   void ejecutarCola();
 
   std::mutex mutex_;
   std::condition_variable condicion_;
-  std::queue<std::packaged_task<ResultadoHistogramaGpu()>> cola_;
+  std::queue<std::function<void()>> cola_;
   bool detener_ = false;
   std::thread hilo_;
 };

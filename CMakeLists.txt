@@ -242,7 +242,8 @@ if(USE_CUDA)
 
     add_library(equipego_histogram_gpu STATIC
         src/analytics/DeliveryHistogramGpu.cpp
-        src/analytics/DeliveryHistogramCuda.cu)
+        src/analytics/DeliveryHistogramCuda.cu
+        src/analytics/EtaReductionCuda.cu)
     target_include_directories(equipego_histogram_gpu PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(equipego_histogram_gpu PUBLIC
@@ -263,4 +264,40 @@ if(USE_CUDA)
         equipego_histogram_gpu)
     add_test(NAME test_delivery_histogram_gpu
         COMMAND test_delivery_histogram_gpu)
+
+    # Feature 08 — Reduction comparte el propietario y el runtime CUDA.
+    add_executable(test_eta_reduction_gpu tests/test_eta_reduction_gpu.cpp)
+    target_link_libraries(test_eta_reduction_gpu PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_eta_reduction_gpu COMMAND test_eta_reduction_gpu)
 endif()
+
+# Feature 08 - Reduction CPU (sin dependencia CUDA).
+add_executable(test_eta_reduction tests/test_eta_reduction.cpp)
+target_include_directories(test_eta_reduction PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_eta_reduction PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_eta_reduction PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_eta_reduction PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_eta_reduction COMMAND test_eta_reduction)
+
+# Feature 08: ruta real de eleccion de candidatos en el dispatcher.
+add_executable(test_eta_dispatch_order tests/test_eta_dispatch_order.cpp)
+target_include_directories(test_eta_dispatch_order PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_eta_dispatch_order PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_eta_dispatch_order PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_eta_dispatch_order PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_eta_dispatch_order COMMAND test_eta_dispatch_order)
+
+# Feature 08 — ruta de seleccion GPU con deadline y fallback CPU.
+# Test CPU puro: no requiere nvcc ni GPU.
+add_executable(test_eta_gpu_dispatch tests/test_eta_gpu_dispatch.cpp)
+target_include_directories(test_eta_gpu_dispatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_eta_gpu_dispatch PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_eta_gpu_dispatch PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_eta_gpu_dispatch PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_eta_gpu_dispatch COMMAND test_eta_gpu_dispatch)

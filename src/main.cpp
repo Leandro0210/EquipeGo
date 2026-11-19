@@ -453,6 +453,27 @@ int main(int argc, char *argv[]) {
     OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
     Fleet fleet(config, roadNetwork, clock);
     Dispatcher dispatcher(config, roadNetwork, fleet);
+#ifdef EQUIPEGO_USE_CUDA
+    // El mismo propietario de CUDA atiende Histogram y el despacho ETA.
+    // Umbral por defecto 128: evitar copias GPU en flotas diminutas.
+    // EQUIPEGO_GPU08_MIN_QUOTES=1 permite verificar la ruta con flota pequena.
+    std::size_t minimoGpu08 = 128;
+    if (const char* variable = std::getenv("EQUIPEGO_GPU08_MIN_QUOTES")) {
+      char* fin = nullptr;
+      errno = 0;
+      const unsigned long long valor = std::strtoull(variable, &fin, 10);
+      if (errno != 0 || fin == variable || *fin != '\0' ||
+          valor == 0 || valor > 100000000ULL) {
+        throw std::invalid_argument("EQUIPEGO_GPU08_MIN_QUOTES invalido");
+      }
+      minimoGpu08 = static_cast<std::size_t>(valor);
+    }
+    dispatcher.setGpuEtaSubmitter(
+        [&propietarioGpu](std::vector<equipego::analytics::EtaCandidato> datos) {
+          return propietarioGpu.enviarEta(std::move(datos));
+        },
+        minimoGpu08);
+#endif
 
     std::unique_ptr<SimulationDashboard> dashboard;
     if (showGui) {
@@ -628,6 +649,14 @@ int main(int argc, char *argv[]) {
                                     {"maxDeliveryMs", audit.maxDeliveryMs},
                                     {"deliveredPerCourier", perCourier},
                                     {"deliveryHistogramMinutes", histogramJson}};
+#ifdef EQUIPEGO_USE_CUDA
+    std::cerr << "REDUCTION_GPU_08,intentos=" << dispatcher.getGpu08Intentos()
+              << ",usos=" << dispatcher.getGpu08Usos()
+              << ",timeouts=" << dispatcher.getGpu08Timeouts()
+              << ",errores=" << dispatcher.getGpu08Errores()
+              << ",diferencias=" << dispatcher.getGpu08Diferencias()
+              << ",minimo_candidatos=" << minimoGpu08 << '\n';
+#endif
     std::cout << summary.dump() << '\n' << std::flush;
     return 0;
 
