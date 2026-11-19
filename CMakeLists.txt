@@ -225,3 +225,42 @@ add_test(NAME test_dp12_motion COMMAND test_dp12_motion)
 list(APPEND DP_TEST_NAMES test_dp12_motion)
 
 set_tests_properties(${DP_TEST_NAMES} PROPERTIES TIMEOUT 30)
+
+# Feature CUDA 07, etapa CPU: test sin dependencias CUDA ni OpenCV.
+add_executable(test_delivery_histogram tests/test_delivery_histogram.cpp)
+target_include_directories(test_delivery_histogram PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_delivery_histogram PRIVATE Threads::Threads)
+add_test(NAME test_delivery_histogram COMMAND test_delivery_histogram)
+
+# Feature 07: CUDA es optativo y esta DESACTIVADO por defecto.
+option(USE_CUDA "Enable optional CUDA analytics" OFF)
+if(USE_CUDA)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    find_package(CUDAToolkit REQUIRED)
+
+    add_library(equipego_histogram_gpu STATIC
+        src/analytics/DeliveryHistogramGpu.cpp
+        src/analytics/DeliveryHistogramCuda.cu)
+    target_include_directories(equipego_histogram_gpu PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(equipego_histogram_gpu PUBLIC
+        Threads::Threads CUDA::cudart)
+    set_target_properties(equipego_histogram_gpu PROPERTIES
+        CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
+
+    target_link_libraries(delivery_sim PRIVATE equipego_histogram_gpu)
+    target_compile_definitions(delivery_sim PRIVATE EQUIPEGO_USE_CUDA=1)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        target_link_libraries(delivery_sim_bench PRIVATE equipego_histogram_gpu)
+        target_compile_definitions(delivery_sim_bench PRIVATE EQUIPEGO_USE_CUDA=1)
+    endif()
+
+    add_executable(test_delivery_histogram_gpu
+        tests/test_delivery_histogram_gpu.cpp)
+    target_link_libraries(test_delivery_histogram_gpu PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_delivery_histogram_gpu
+        COMMAND test_delivery_histogram_gpu)
+endif()

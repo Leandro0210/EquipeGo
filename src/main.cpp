@@ -1,3 +1,7 @@
+#include "analytics/DeliveryHistogram.hpp"
+#ifdef EQUIPEGO_USE_CUDA
+#include "analytics/DeliveryHistogramGpu.hpp"
+#endif
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
 #include "core/Logger.hpp"
@@ -22,6 +26,8 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <numeric>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -48,6 +54,7 @@ struct EventAudit {
   std::size_t stopping = 0;
   long long deliveryDurationSumMs = 0;
   long long maxDeliveryMs = 0;
+  std::vector<long long> deliveryDurationsMs;
   std::unordered_map<std::string, std::size_t> deliveredPerCourier;
 };
 
@@ -143,6 +150,7 @@ EventAudit auditEventLog(const std::string &filename,
         throw std::runtime_error("Duracion negativa: " + orderId);
       }
       ++audit.delivered;
+      audit.deliveryDurationsMs.push_back(duration);
       ++audit.deliveredPerCourier[courier];
       audit.deliveryDurationSumMs += duration;
       if (duration > audit.maxDeliveryMs) {
@@ -437,6 +445,9 @@ int main(int argc, char *argv[]) {
 
     SimulationClock clock;
     EventLogger logger(config.logFilePath, true);
+#ifdef EQUIPEGO_USE_CUDA
+    equipego::analytics::PropietarioGpuHistograma propietarioGpu;
+#endif
     RoadNetwork roadNetwork(config);
     OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
     OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
@@ -588,6 +599,25 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("La suma por repartidor no coincide");
     }
 
+    auto histograma =
+        equipego::analytics::histogramaEntregasCPU(audit.deliveryDurationsMs);
+#ifdef EQUIPEGO_USE_CUDA
+    // El hilo propietario serializa el acceso a CUDA; main recibe un future.
+    auto futuroGpu = propietarioGpu.enviar(audit.deliveryDurationsMs);
+    const auto resultadoGpu = futuroGpu.get();
+    if (resultadoGpu.bins != histograma) {
+      throw std::logic_error("Histograma GPU distinto de referencia CPU");
+    }
+    histograma = resultadoGpu.bins;
+    std::cerr << "HISTOGRAMA_GPU_07,kernel_ms=" << resultadoGpu.kernelMs
+              << ",total_ms=" << resultadoGpu.totalMs << '\n';
+#endif
+    const auto sumaBins = std::accumulate(histograma.begin(), histograma.end(),
+                                          std::uint64_t{0});
+    if (sumaBins != audit.delivered) {
+      throw std::logic_error("El histograma no coincide con las entregas");
+    }
+    const nlohmann::json histogramJson = histograma;
     const nlohmann::json summary = {{"created", audit.created},
                                     {"delivered", audit.delivered},
                                     {"rejected", audit.rejected},
@@ -596,7 +626,8 @@ int main(int argc, char *argv[]) {
                                     {"breakdowns", audit.breakdowns},
                                     {"avgDeliveryMs", avgDeliveryMs},
                                     {"maxDeliveryMs", audit.maxDeliveryMs},
-                                    {"deliveredPerCourier", perCourier}};
+                                    {"deliveredPerCourier", perCourier},
+                                    {"deliveryHistogramMinutes", histogramJson}};
     std::cout << summary.dump() << '\n' << std::flush;
     return 0;
 
