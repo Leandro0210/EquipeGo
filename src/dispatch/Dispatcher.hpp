@@ -2,6 +2,7 @@
 #pragma once
 
 #include "analytics/EtaGpuDispatch.hpp"
+#include "analytics/RestaurantOrderGpuDispatch09.hpp"
 #include "config/Config.hpp"
 #include "fleet/Fleet.hpp"
 #include "map/RoadNetwork.hpp"
@@ -12,6 +13,8 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -49,6 +52,13 @@ private:
   std::unique_ptr<QuoteExecutor> executor;
   equipego::analytics::EnviarReduccionGpu08 gpuEtaSubmitter;
   std::size_t gpuMinQuotes = 128;
+  equipego::analytics::EnviarScanGpu09 gpuScanSubmitter;
+  std::size_t gpuScanMinOrders = 16;  // umbral configurable, no GPU para lotes pequenos
+  std::atomic<std::size_t> gpu09Intentos{0};
+  std::atomic<std::size_t> gpu09Usos{0};
+  std::atomic<std::size_t> gpu09Timeouts{0};
+  std::atomic<std::size_t> gpu09Errores{0};
+  std::atomic<std::size_t> gpu09Diferencias{0};
 
   std::atomic<bool> stopRequested{false};
 
@@ -76,6 +86,21 @@ public:
   std::size_t getGpu08Timeouts() const { return gpu08Timeouts.load(); }
   std::size_t getGpu08Errores() const { return gpu08Errores.load(); }
   std::size_t getGpu08Diferencias() const { return gpu08Diferencias.load(); }
+
+  // Configurar antes de iniciar Dispatcher::run. No se conecta en builds CPU.
+  void setGpuScan09Submitter(equipego::analytics::EnviarScanGpu09 submitter,
+                             std::size_t minimoPedidos) {
+    if (minimoPedidos == 0) {
+      throw std::invalid_argument("Scan09: minimoPedidos debe ser > 0");
+    }
+    gpuScanSubmitter = std::move(submitter);
+    gpuScanMinOrders = minimoPedidos;
+  }
+  std::size_t getGpu09Intentos() const { return gpu09Intentos.load(); }
+  std::size_t getGpu09Usos() const { return gpu09Usos.load(); }
+  std::size_t getGpu09Timeouts() const { return gpu09Timeouts.load(); }
+  std::size_t getGpu09Errores() const { return gpu09Errores.load(); }
+  std::size_t getGpu09Diferencias() const { return gpu09Diferencias.load(); }
 
   Dispatcher(const Dispatcher &) = delete;
   Dispatcher &operator=(const Dispatcher &) = delete;

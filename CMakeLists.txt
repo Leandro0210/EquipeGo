@@ -243,7 +243,8 @@ if(USE_CUDA)
     add_library(equipego_histogram_gpu STATIC
         src/analytics/DeliveryHistogramGpu.cpp
         src/analytics/DeliveryHistogramCuda.cu
-        src/analytics/EtaReductionCuda.cu)
+        src/analytics/EtaReductionCuda.cu
+        src/analytics/RestaurantOrderScanCuda.cu)
     target_include_directories(equipego_histogram_gpu PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(equipego_histogram_gpu PUBLIC
@@ -269,6 +270,14 @@ if(USE_CUDA)
     add_executable(test_eta_reduction_gpu tests/test_eta_reduction_gpu.cpp)
     target_link_libraries(test_eta_reduction_gpu PRIVATE equipego_histogram_gpu)
     add_test(NAME test_eta_reduction_gpu COMMAND test_eta_reduction_gpu)
+
+    # Feature 09 - Scan estable GPU dentro del propietario CUDA.
+    add_executable(test_restaurant_order_scan_gpu
+        tests/test_restaurant_order_scan_gpu.cpp)
+    target_link_libraries(test_restaurant_order_scan_gpu PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_restaurant_order_scan_gpu
+        COMMAND test_restaurant_order_scan_gpu)
 endif()
 
 # Feature 08 - Reduction CPU (sin dependencia CUDA).
@@ -301,3 +310,39 @@ if(ENABLE_TSAN)
     target_link_options(test_eta_gpu_dispatch PRIVATE -fsanitize=thread)
 endif()
 add_test(NAME test_eta_gpu_dispatch COMMAND test_eta_gpu_dispatch)
+
+# Feature 09 — Scan (etapa 1 CPU): grouping stable por restaurante.
+add_executable(test_restaurant_order_scan tests/test_restaurant_order_scan.cpp)
+target_include_directories(test_restaurant_order_scan PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_order_scan PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_restaurant_order_scan PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_restaurant_order_scan PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_restaurant_order_scan COMMAND test_restaurant_order_scan)
+
+# Feature 09 — etapa 2: vista estable de pedidos reales sin alterar FIFO.
+add_executable(test_restaurant_order_live09 tests/test_restaurant_order_live09.cpp)
+target_include_directories(test_restaurant_order_live09 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_order_live09 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_restaurant_order_live09 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_restaurant_order_live09 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_restaurant_order_live09 COMMAND test_restaurant_order_live09)
+
+# Feature09 - Etapa 4: seleccion observacional GPU/CPU, sin NVCC en CPU.
+add_executable(test_restaurant_order_gpu_dispatch09
+    tests/test_restaurant_order_gpu_dispatch09.cpp)
+target_include_directories(test_restaurant_order_gpu_dispatch09 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_order_gpu_dispatch09 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_restaurant_order_gpu_dispatch09 PRIVATE
+        -fsanitize=thread -g -O1)
+    target_link_options(test_restaurant_order_gpu_dispatch09 PRIVATE
+        -fsanitize=thread)
+endif()
+add_test(NAME test_restaurant_order_gpu_dispatch09
+    COMMAND test_restaurant_order_gpu_dispatch09)
+set_tests_properties(test_restaurant_order_gpu_dispatch09 PROPERTIES TIMEOUT 30)

@@ -1,4 +1,5 @@
 #include "analytics/EtaGpuDispatch.hpp"
+#include "analytics/RestaurantOrderLive09.hpp"
 #include "dispatch/Dispatcher.hpp"
 
 #include "core/Clock.hpp"
@@ -28,6 +29,14 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
 
   orderBook.setNotificationSignal(signal);
 
+  // Scan09: indexacion constante de restaurantes, sin tocar OrderBook.
+  const auto indiceRestaurantes09 =
+      equipego::analytics::indexarRestaurantes09(config.restaurants);
+  std::size_t lotesObservados09 = 0;
+  std::size_t observacionesPedidos09 = 0;
+  std::size_t gruposObservados09 = 0;
+  std::size_t maximoGrupo09 = 0;
+
   std::deque<Order> waiting;
 
   while (!stopRequested.load()) {
@@ -56,6 +65,29 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
       waiting.push_back(std::move(*next));
     }
 
+
+    // Vista CSR del lote realmente pendiente; no mueve pedidos ni
+    // altera su orden FIFO de asignacion. Los pedidos pueden reaparecer
+    // en varios lotes si siguen pendientes (contadores NO son unicos).
+    if (!waiting.empty()) {
+      // Deadline corto EN TIEMPO REAL: si CUDA se demora, CPU gana.
+      const auto limite09 = std::chrono::steady_clock::now() +
+          std::chrono::milliseconds(25);
+      const auto resultado09 = equipego::analytics::agruparPendientesConGpu09(
+          waiting, indiceRestaurantes09, config.restaurants.size(),
+          gpuScanSubmitter, limite09, gpuScanMinOrders);
+      const auto& vista09 = resultado09.vista;
+      using Estado09 = equipego::analytics::EstadoScanGpu09;
+      if (resultado09.estado != Estado09::SoloCpu) ++gpu09Intentos;
+      if (resultado09.estado == Estado09::Usada) ++gpu09Usos;
+      if (resultado09.estado == Estado09::SinTiempo) ++gpu09Timeouts;
+      if (resultado09.estado == Estado09::FalloGpu) ++gpu09Errores;
+      if (resultado09.estado == Estado09::DiferenciaCpuGpu) ++gpu09Diferencias;
+      ++lotesObservados09;
+      observacionesPedidos09 += waiting.size();
+      gruposObservados09 += vista09.gruposNoVacios;
+      maximoGrupo09 = std::max(maximoGrupo09, vista09.maximoGrupo);
+    }
 
     for (auto it = waiting.begin();
          it != waiting.end() && !stopRequested.load();) {
@@ -190,6 +222,20 @@ void Dispatcher::run(OrderBook &orderBook, EventLogger &logger,
     signal->waitUntilChange(observedVersion, deadline, stopRequested);
   }
 
+
+  std::cerr << "SCAN09_CPU,batches=" << lotesObservados09
+            << ",observaciones=" << observacionesPedidos09
+            << ",grupos=" << gruposObservados09
+            << ",max_grupo=" << maximoGrupo09 << '\n';
+
+#ifdef EQUIPEGO_USE_CUDA
+  std::cerr << "SCAN09_GPU,intentos=" << gpu09Intentos.load()
+            << ",usos=" << gpu09Usos.load()
+            << ",timeouts=" << gpu09Timeouts.load()
+            << ",errores=" << gpu09Errores.load()
+            << ",diferencias=" << gpu09Diferencias.load()
+            << ",minimo_pedidos=" << gpuScanMinOrders << '\n';
+#endif
 
   for (Order &order : waiting) {
 

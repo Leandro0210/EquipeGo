@@ -2,6 +2,7 @@
 
 #include "analytics/DeliveryHistogram.hpp"
 #include "analytics/EtaReductionGpu.hpp"
+#include "analytics/RestaurantOrderScanGpu.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -43,6 +44,10 @@ class PropietarioGpuHistograma {
   // El mismo hilo propietario atiende Histogram 07 y Reduction 08.
   std::future<ResultadoReduccionGpu> enviarEta(
       std::vector<EtaCandidato> candidatos);
+
+  // Feature 09: mismo hilo propietario para Scan de pedidos por restaurante.
+  std::future<ResultadoScanGpu09> enviarScan09(
+      std::vector<std::size_t> restauranteIds, std::size_t restaurantes);
 
  private:
   void ejecutarCola();

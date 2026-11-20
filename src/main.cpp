@@ -473,6 +473,24 @@ int main(int argc, char *argv[]) {
           return propietarioGpu.enviarEta(std::move(datos));
         },
         minimoGpu08);
+    // Feature09: agrupacion observacional de pedidos por restaurante.
+    // Por defecto solo envia lotes de al menos 16 pedidos a GPU;
+    // EQUIPEGO_GPU09_MIN_ORDERS=1 habilita la ruta en pruebas con lotes pequenos.
+    std::size_t minimoGpu09 = 16;
+    if (const char* variable09 = std::getenv("EQUIPEGO_GPU09_MIN_ORDERS")) {
+      char* fin09 = nullptr;
+      errno = 0;
+      const unsigned long long valor09 = std::strtoull(variable09, &fin09, 10);
+      if (errno != 0 || fin09 == variable09 || *fin09 != '\0' ||
+          valor09 == 0 || valor09 > 100000000ULL) {
+        throw std::invalid_argument("EQUIPEGO_GPU09_MIN_ORDERS invalido");
+      }
+      minimoGpu09 = static_cast<std::size_t>(valor09);
+    }
+    dispatcher.setGpuScan09Submitter(
+        [&propietarioGpu](std::vector<std::size_t> ids, std::size_t restaurantes) {
+          return propietarioGpu.enviarScan09(std::move(ids), restaurantes);
+        }, minimoGpu09);
 #endif
 
     std::unique_ptr<SimulationDashboard> dashboard;

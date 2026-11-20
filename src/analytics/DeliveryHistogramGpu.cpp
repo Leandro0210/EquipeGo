@@ -50,6 +50,22 @@ std::future<ResultadoReduccionGpu> PropietarioGpuHistograma::enviarEta(
   return futuro;
 }
 
+std::future<ResultadoScanGpu09> PropietarioGpuHistograma::enviarScan09(
+    std::vector<std::size_t> restauranteIds, std::size_t restaurantes) {
+  auto tarea = std::make_shared<std::packaged_task<ResultadoScanGpu09()>>(
+      [datos = std::move(restauranteIds), restaurantes] {
+        return ejecutarAgrupacionScanGpu09(datos, restaurantes);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
 void PropietarioGpuHistograma::ejecutarCola() {
   while (true) {
     std::function<void()> tarea;
