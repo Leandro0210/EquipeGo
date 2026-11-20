@@ -244,7 +244,8 @@ if(USE_CUDA)
         src/analytics/DeliveryHistogramGpu.cpp
         src/analytics/DeliveryHistogramCuda.cu
         src/analytics/EtaReductionCuda.cu
-        src/analytics/RestaurantOrderScanCuda.cu)
+        src/analytics/RestaurantOrderScanCuda.cu
+        src/map/FloydWarshallCuda03.cu)
     target_include_directories(equipego_histogram_gpu PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(equipego_histogram_gpu PUBLIC
@@ -346,3 +347,68 @@ endif()
 add_test(NAME test_restaurant_order_gpu_dispatch09
     COMMAND test_restaurant_order_gpu_dispatch09)
 set_tests_properties(test_restaurant_order_gpu_dispatch09 PROPERTIES TIMEOUT 30)
+
+
+# Feature 03 - Memory Tiling, etapa 1: tabla Floyd-Warshall CPU.
+# No sustituye Dijkstra ni altera el Dispatcher.
+add_executable(test_floyd_warshall03
+    tests/test_floyd_warshall03.cpp
+    src/map/RoadNetwork.cpp
+    src/config/ConfigLoader.cpp)
+configure_equipego_target(test_floyd_warshall03)
+add_test(NAME test_floyd_warshall03
+    COMMAND test_floyd_warshall03
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+set_tests_properties(test_floyd_warshall03 PROPERTIES TIMEOUT 30)
+
+
+# Feature 03 - Memory Tiling, etapa 2: cache optativa de distancias.
+add_executable(test_floyd_cache03
+    tests/test_floyd_cache03.cpp
+    src/map/RoadNetwork.cpp
+    src/config/ConfigLoader.cpp)
+configure_equipego_target(test_floyd_cache03)
+add_test(NAME test_floyd_cache03
+    COMMAND test_floyd_cache03
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+set_tests_properties(test_floyd_cache03 PROPERTIES TIMEOUT 30)
+
+
+# Feature 03 - Etapa 4: backend CUDA tiled; no modifica el dispatcher.
+# La prueba GPU solo se registra al compilar con USE_CUDA=ON.
+if(USE_CUDA)
+    add_executable(test_floyd_warshall_gpu03
+        tests/test_floyd_warshall_gpu03.cpp
+        src/map/RoadNetwork.cpp
+        src/config/ConfigLoader.cpp)
+    configure_equipego_target(test_floyd_warshall_gpu03)
+    target_link_libraries(test_floyd_warshall_gpu03 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_floyd_warshall_gpu03
+        COMMAND test_floyd_warshall_gpu03
+        ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+    set_tests_properties(test_floyd_warshall_gpu03 PROPERTIES TIMEOUT 120)
+endif()
+
+# Feature 03 - Etapa 7: integracion optativa de la tabla GPU, precalculo al inicio.
+# Sin nvcc o con USE_CUDA=OFF se conservan las 19 pruebas y Dijkstra.
+if(USE_CUDA)
+    target_sources(delivery_sim PRIVATE src/map/FloydWarshallGpuCache03.cpp)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        target_sources(delivery_sim_bench PRIVATE src/map/FloydWarshallGpuCache03.cpp)
+    endif()
+
+    add_executable(test_floyd_cache_gpu_integracion03
+        tests/test_floyd_cache_gpu_integracion03.cpp
+        src/map/FloydWarshallGpuCache03.cpp
+        src/map/RoadNetwork.cpp
+        src/config/ConfigLoader.cpp)
+    configure_equipego_target(test_floyd_cache_gpu_integracion03)
+    target_link_libraries(test_floyd_cache_gpu_integracion03 PRIVATE
+        equipego_histogram_gpu)
+    target_compile_definitions(test_floyd_cache_gpu_integracion03 PRIVATE
+        EQUIPEGO_USE_CUDA=1)
+    add_test(NAME test_floyd_cache_gpu_integracion03
+        COMMAND test_floyd_cache_gpu_integracion03
+        ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+    set_tests_properties(test_floyd_cache_gpu_integracion03 PROPERTIES TIMEOUT 120)
+endif()

@@ -449,6 +449,59 @@ int main(int argc, char *argv[]) {
     equipego::analytics::PropietarioGpuHistograma propietarioGpu;
 #endif
     RoadNetwork roadNetwork(config);
+    // Feature 03: GPU optativa. Nunca se usa en consultas de ETA en caliente:
+    // solo precalcula la tabla ANTES de iniciar Fleet/Dispatcher y sus hilos.
+    const char* flagGpu03 = std::getenv("EQUIPEGO_FLOYD03_GPU");
+    const std::string valorGpu03 = flagGpu03 ? std::string(flagGpu03) : "0";
+    const char* flagCpu03Previo = std::getenv("EQUIPEGO_FLOYD03_CPU");
+    const std::string valorCpu03Previo = flagCpu03Previo
+        ? std::string(flagCpu03Previo) : "0";
+    if ((valorGpu03 != "0" && valorGpu03 != "1") ||
+        (valorCpu03Previo != "0" && valorCpu03Previo != "1")) {
+      throw std::invalid_argument("FLOYD03: flags CPU/GPU deben ser 0 o 1");
+    }
+    if (valorGpu03 == "1" && valorCpu03Previo == "1") {
+      throw std::invalid_argument("FLOYD03: CPU=1 y GPU=1 son excluyentes");
+    }
+    if (valorGpu03 == "1") {
+#ifdef EQUIPEGO_USE_CUDA
+      try {
+        const auto info03 = roadNetwork.habilitarFloyd03Gpu(config, 4096);
+        std::cerr << "FLOYD03_GPU_CACHE,enabled=1,nodos=" << info03.nodos
+                  << ",pares_verificados=" << info03.paresVerificados
+                  << ",bytes=" << info03.bytesMatriz
+                  << ",kernel_ms=" << info03.kernelMs
+                  << ",total_ms=" << info03.totalMs << '\n';
+      } catch (const std::exception& error03) {
+        // No se publica una tabla parcial: todas las consultas usan Dijkstra.
+        std::cerr << "FLOYD03_GPU_CACHE,enabled=0,fallback=Dijkstra,motivo="
+                  << error03.what() << '\n';
+      }
+#else
+      std::cerr << "FLOYD03_GPU_CACHE,enabled=0,fallback=Dijkstra,motivo="
+                   "USE_CUDA_OFF\n";
+#endif
+    }
+    // Opt-in para experimentar sin modificar el recorrido real de Dijkstra.
+    // Solo inicializar antes de Fleet/Dispatcher y sus hilos.
+    if (const char* flag03 = std::getenv("EQUIPEGO_FLOYD03_CPU")) {
+      const std::string valor03(flag03);
+      if (valor03 != "0" && valor03 != "1") {
+        throw std::invalid_argument("EQUIPEGO_FLOYD03_CPU debe ser 0 o 1");
+      }
+      if (valor03 == "1") {
+        try {
+          roadNetwork.habilitarFloyd03Cpu(config, 16);
+          std::cerr << "FLOYD03_CPU_CACHE,enabled=1,nodos="
+                    << config.nodes.size() << ",bytes="
+                    << roadNetwork.floyd03Bytes() << '\n';
+        } catch (const std::exception &error03) {
+          // Cualquier fallo de precalculo conserva Dijkstra sin tabla.
+          std::cerr << "FLOYD03_CPU_CACHE,enabled=0,fallback=Dijkstra,motivo="
+                    << error03.what() << '\n';
+        }
+      }
+    }
     OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
     OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
     Fleet fleet(config, roadNetwork, clock);

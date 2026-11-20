@@ -132,7 +132,7 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
                                        const std::string &restaurantNode,
                                        const std::string &deliveryNode) -> double {
       const auto toRestaurant =
-          this->roadNetwork.shortestRoute(startNode, restaurantNode);
+          this->roadNetwork.shortestDistanceMeters(startNode, restaurantNode);
       if (!toRestaurant) {
         throw std::runtime_error("No existe una ruta valida");
       }
@@ -141,15 +141,15 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
           restaurantNode, deliveryNode, [this, &restaurantNode,
                                          &deliveryNode]() -> double {
             const auto route =
-                this->roadNetwork.shortestRoute(restaurantNode, deliveryNode);
+                this->roadNetwork.shortestDistanceMeters(restaurantNode, deliveryNode);
             if (!route) {
               throw std::runtime_error("No existe una ruta valida");
             }
-            return route->distanceMeters;
+            return *route;
           });
 
       const double distanceMeters =
-          toRestaurant->distanceMeters + toCustomerMeters;
+          *toRestaurant + toCustomerMeters;
       const double speedMetersPerSecond = this->config.fleet.speedKmh / 3.6;
       return distanceMeters / speedMetersPerSecond;
     };
