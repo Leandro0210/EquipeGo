@@ -4,6 +4,7 @@
 #include "analytics/EtaReductionGpu.hpp"
 #include "analytics/RestaurantOrderScanGpu.hpp"
 #include "analytics/OrderHeatmapGpu05.hpp"
+#include "analytics/CourierCoverageGpu06.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -54,6 +55,11 @@ class PropietarioGpuHistograma {
   std::future<equipego::convolution05::GpuResult05> enviarHeatmap05(
       equipego::convolution05::DemandGrid05 grid,
       equipego::convolution05::GpuAlgorithm05 algorithm);
+
+  // E4 Stencil06: futuro enviado a la cola existente, un unico contexto GPU.
+  std::future<equipego::stencil06::ResultadoGpu06> enviarCobertura06(
+      equipego::stencil06::Campo06 campo, unsigned int barridos,
+      equipego::stencil06::VarianteGpu06 variante);
 
  private:
   void ejecutarCola();

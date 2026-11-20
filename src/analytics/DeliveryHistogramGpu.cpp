@@ -84,6 +84,24 @@ PropietarioGpuHistograma::enviarHeatmap05(
   return result;
 }
 
+std::future<equipego::stencil06::ResultadoGpu06>
+PropietarioGpuHistograma::enviarCobertura06(
+    equipego::stencil06::Campo06 campo, unsigned int barridos,
+    equipego::stencil06::VarianteGpu06 variante) {
+  auto tarea = std::make_shared<std::packaged_task<equipego::stencil06::ResultadoGpu06()>>(
+      [datos = std::move(campo), barridos, variante] {
+        return equipego::stencil06::evolucionarGpu(datos, barridos, variante);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
 void PropietarioGpuHistograma::ejecutarCola() {
   while (true) {
     std::function<void()> tarea;

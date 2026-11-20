@@ -511,3 +511,80 @@ if(USE_CUDA)
     add_test(NAME test_heatmap_gpu_owner05 COMMAND test_heatmap_gpu_owner05)
     set_tests_properties(test_heatmap_gpu_owner05 PROPERTIES TIMEOUT 180)
 endif()
+
+
+# Feature 06 - Stencil CPU: cobertura de repartidores sobre nodos OSM.
+# No cambia Fleet, Dispatcher, estado de pedidos ni backend CUDA existente.
+add_executable(test_courier_coverage06 tests/test_courier_coverage06.cpp)
+target_include_directories(test_courier_coverage06 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_coverage06 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_courier_coverage06 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_courier_coverage06 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_courier_coverage06 COMMAND test_courier_coverage06)
+set_tests_properties(test_courier_coverage06 PROPERTIES TIMEOUT 60)
+
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_courier_coverage06 benchmarks/bench_courier_coverage06.cpp)
+    target_include_directories(bench_courier_coverage06 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_courier_coverage06 PRIVATE Threads::Threads)
+endif()
+
+
+# Feature06 Etapa 2 GPU: Stencil Jacobi (GPU optativa, CPU default intacto).
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/CourierCoverageCuda06.cu)
+    add_executable(test_courier_coverage_gpu06
+        tests/test_courier_coverage_gpu06.cpp)
+    target_include_directories(test_courier_coverage_gpu06 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_coverage_gpu06 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_coverage_gpu06 COMMAND test_courier_coverage_gpu06)
+    set_tests_properties(test_courier_coverage_gpu06 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_courier_coverage_gpu06
+            benchmarks/bench_courier_coverage_gpu06.cpp)
+        target_include_directories(bench_courier_coverage_gpu06 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_courier_coverage_gpu06 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+
+# Feature06 Etapa 3 - snapshot real observacional del Fleet, SOLO CPU opt-in.
+add_executable(test_courier_coverage_runtime06
+    tests/test_courier_coverage_runtime06.cpp)
+target_include_directories(test_courier_coverage_runtime06 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_coverage_runtime06 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_courier_coverage_runtime06 PRIVATE
+        -fsanitize=thread -g -O1)
+    target_link_options(test_courier_coverage_runtime06 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_courier_coverage_runtime06 COMMAND test_courier_coverage_runtime06)
+set_tests_properties(test_courier_coverage_runtime06 PROPERTIES TIMEOUT 60)
+
+
+# Feature06 E4: seleccion GPU/CPU segura y propietario CUDA compartido.
+add_executable(test_courier_coverage_gpu_dispatch06
+    tests/test_courier_coverage_gpu_dispatch06.cpp)
+target_include_directories(test_courier_coverage_gpu_dispatch06 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_coverage_gpu_dispatch06 PRIVATE Threads::Threads)
+add_test(NAME test_courier_coverage_gpu_dispatch06
+    COMMAND test_courier_coverage_gpu_dispatch06)
+set_tests_properties(test_courier_coverage_gpu_dispatch06 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_courier_coverage_gpu_owner06
+        tests/test_courier_coverage_gpu_owner06.cpp)
+    target_include_directories(test_courier_coverage_gpu_owner06 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_coverage_gpu_owner06 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_coverage_gpu_owner06
+        COMMAND test_courier_coverage_gpu_owner06)
+    set_tests_properties(test_courier_coverage_gpu_owner06 PROPERTIES TIMEOUT 180)
+endif()

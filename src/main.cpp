@@ -1,3 +1,5 @@
+#include "analytics/CoverageGpuDispatch06.hpp"
+#include "analytics/CourierCoverageRuntime06.hpp"
 #include "analytics/DeliveryHistogram.hpp"
 #include "analytics/HeatmapRuntime05.hpp"
 #include "analytics/HeatmapGpuDispatch05.hpp"
@@ -678,6 +680,61 @@ int main(int argc, char *argv[]) {
         audit.created - audit.delivered - audit.rejected;
     if (pendingFromEvents != pendingCount) {
       throw std::logic_error("Los pedidos pendientes no coinciden");
+    }
+
+    // Feature06 E4: eleccion observacional CPU/GPU con referencia CPU
+    // y fallback seguro. Usa SOLO el propietario CUDA, despues de Fleet::join.
+    if (const char* flagCoverage06 = std::getenv("EQUIPEGO_COVERAGE06")) {
+      const std::string mode06(flagCoverage06);
+      if (mode06 != "0" && mode06 != "1") {
+        std::cerr << "STENCIL06_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (mode06 == "1") {
+        try {
+          const char* flagGpu06 = std::getenv("EQUIPEGO_COVERAGE06_GPU");
+          const std::string gpuMode06 = flagGpu06 ? std::string(flagGpu06) : "0";
+          if (gpuMode06 != "0" && gpuMode06 != "1")
+            throw std::invalid_argument("EQUIPEGO_COVERAGE06_GPU debe ser 0 o 1");
+          const auto captured06 = equipego::stencil06::capturarFleet06(
+              config, fleet, 512);
+#ifdef EQUIPEGO_USE_CUDA
+          const auto selected06 = equipego::stencil06::seleccionarCobertura06(
+              captured06.campo, 20, gpuMode06 == "1", true,
+              [&propietarioGpu](equipego::stencil06::Campo06 campo,
+                               unsigned int barridos) {
+                return propietarioGpu.enviarCobertura06(
+                    std::move(campo), barridos,
+                    equipego::stencil06::VarianteGpu06::BasicoGlobal);
+              });
+#else
+          const auto selected06 = equipego::stencil06::seleccionarCobertura06(
+              captured06.campo, 20, gpuMode06 == "1", false);
+#endif
+          if (selected06.gpuSolicitada && !selected06.gpuUsada)
+            std::cerr << "STENCIL06_GPU_FALLBACK,reason="
+                      << selected06.motivoFallback << '\n';
+          if (selected06.gpuUsada)
+            std::cerr << "STENCIL06_GPU_OWNER,verified=1,kernel_ms="
+                      << selected06.kernelMs << ",total_ms="
+                      << selected06.totalMs << ",max_error="
+                      << selected06.errorMaximo << '\n';
+          const char* out06 = std::getenv("EQUIPEGO_COVERAGE06_PREFIX");
+          const std::string prefix06 = out06 ? std::string(out06) :
+              "../Resultados_Feature06/Integracion06/coverage06_cpu_run";
+          equipego::stencil06::guardarCobertura06(
+              config, captured06, selected06.valores, prefix06, 20,
+              selected06.backend);
+          std::cerr << "STENCIL06_RUN,enabled=1,backend="
+                    << selected06.backend << ",couriers="
+                    << captured06.couriersTotales << ",used="
+                    << captured06.couriersUsados << ",broken="
+                    << captured06.couriersAveriados << ",sources="
+                    << captured06.fuentesUnicas << ",grid=512x512,png="
+                    << prefix06 << ".png\n";
+        } catch (const std::exception& error06) {
+          std::cerr << "STENCIL06_RUN,enabled=0,error="
+                    << error06.what() << '\n';
+        }
+      }
     }
 
     // Feature05 E3: mapa de ORIGENES (restaurantes) de los pedidos
