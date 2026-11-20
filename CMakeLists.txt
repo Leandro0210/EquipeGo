@@ -412,3 +412,40 @@ if(USE_CUDA)
         ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
     set_tests_properties(test_floyd_cache_gpu_integracion03 PROPERTIES TIMEOUT 120)
 endif()
+
+# Feature 04 - AoS vs SoA CPU, etapa 1 (sin cambios en dispatcher).
+add_executable(test_courier_layout04 tests/test_courier_layout04.cpp)
+target_include_directories(test_courier_layout04 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_layout04 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_courier_layout04 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_courier_layout04 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_courier_layout04 COMMAND test_courier_layout04)
+set_tests_properties(test_courier_layout04 PROPERTIES TIMEOUT 60)
+
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_courier_layout04 benchmarks/bench_courier_layout04.cpp)
+    target_include_directories(bench_courier_layout04 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_courier_layout04 PRIVATE Threads::Threads)
+endif()
+
+# Feature 04 - Etapa 2: kernels CUDA AoS / SoA de snapshot, sin mutar Fleet.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/CourierLayoutCuda04.cu)
+    add_executable(test_courier_layout_gpu04 tests/test_courier_layout_gpu04.cpp)
+    target_include_directories(test_courier_layout_gpu04 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_layout_gpu04 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_layout_gpu04 COMMAND test_courier_layout_gpu04)
+    set_tests_properties(test_courier_layout_gpu04 PROPERTIES TIMEOUT 120)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_courier_layout_gpu04
+            benchmarks/bench_courier_layout_gpu04.cpp)
+        target_include_directories(bench_courier_layout_gpu04 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_courier_layout_gpu04 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
