@@ -1,4 +1,6 @@
 #include "analytics/DeliveryHistogram.hpp"
+#include "analytics/HeatmapRuntime05.hpp"
+#include "analytics/HeatmapGpuDispatch05.hpp"
 #ifdef EQUIPEGO_USE_CUDA
 #include "analytics/DeliveryHistogramGpu.hpp"
 #endif
@@ -47,6 +49,7 @@
 
 struct EventAudit {
   std::size_t created = 0;
+  std::unordered_map<std::string, std::size_t> createdPerRestaurant;
   std::size_t delivered = 0;
   std::size_t rejected = 0;
   std::size_t reassigned = 0;
@@ -125,6 +128,8 @@ EventAudit auditEventLog(const std::string &filename,
         throw std::runtime_error("Pedido creado dos veces: " + orderId);
       }
       ++audit.created;
+      ++audit.createdPerRestaurant[
+          event.at("restaurant").get<std::string>()];
     } else if (name == "orderAssigned") {
       if (creationTimes.find(orderId) == creationTimes.end() ||
           !event.contains("courier")) {
@@ -673,6 +678,71 @@ int main(int argc, char *argv[]) {
         audit.created - audit.delivered - audit.rejected;
     if (pendingFromEvents != pendingCount) {
       throw std::logic_error("Los pedidos pendientes no coinciden");
+    }
+
+    // Feature05 E3: mapa de ORIGENES (restaurantes) de los pedidos
+    // generados en esta ejecucion, solo al finalizar la simulacion.
+    // No inventa destinos ni reemplaza el despacho.
+    if (const char* flagHeatmap05 = std::getenv("EQUIPEGO_HEATMAP05")) {
+      const std::string modeHeatmap05(flagHeatmap05);
+      if (modeHeatmap05 != "0" && modeHeatmap05 != "1") {
+        throw std::invalid_argument("EQUIPEGO_HEATMAP05 debe ser 0 o 1");
+      }
+      if (modeHeatmap05 == "1") {
+        try {
+          const auto projected05 =
+              equipego::convolution05::projectRestaurantOrders05(
+                  config, audit.createdPerRestaurant, 512);
+          if (projected05.created != audit.created) {
+            throw std::logic_error("HEATMAP05: created != auditoria de eventos");
+          }
+          // E4: opt-in CUDA solo a traves del propietario GPU existente.
+          const char* flagGpu05 = std::getenv("EQUIPEGO_HEATMAP05_GPU");
+          const std::string gpuMode05 = flagGpu05 ? std::string(flagGpu05) : "0";
+          if (gpuMode05 != "0" && gpuMode05 != "1") {
+            throw std::invalid_argument("EQUIPEGO_HEATMAP05_GPU debe ser 0 o 1");
+          }
+          const bool gpuHeatmap05 = gpuMode05 == "1";
+#ifdef EQUIPEGO_USE_CUDA
+          const auto selected05 = equipego::convolution05::selectHeatmap05(
+              projected05.grid, gpuHeatmap05, true,
+              [&propietarioGpu](equipego::convolution05::DemandGrid05 data) {
+                return propietarioGpu.enviarHeatmap05(
+                    std::move(data),
+                    equipego::convolution05::GpuAlgorithm05::TiledSharedConstant);
+              });
+#else
+          const auto selected05 = equipego::convolution05::selectHeatmap05(
+              projected05.grid, gpuHeatmap05, false);
+#endif
+          if (selected05.gpuRequested && !selected05.usedGpu) {
+            std::cerr << "HEATMAP05_GPU_FALLBACK,reason="
+                      << selected05.fallbackReason << '\n';
+          }
+          if (selected05.usedGpu) {
+            std::cerr << "HEATMAP05_GPU_OWNER,verified=1,kernel_ms="
+                      << selected05.kernelMs << ",total_ms="
+                      << selected05.totalMs << '\n';
+          }
+          const char* prefixEnv05 = std::getenv("EQUIPEGO_HEATMAP05_PREFIX");
+          const std::string prefix05 = prefixEnv05
+              ? std::string(prefixEnv05)
+              : "../Resultados_Feature05/Integracion05/heatmap05_cpu_run";
+          equipego::convolution05::saveRunHeatmap05(
+              config, projected05, selected05.values, prefix05, selected05.backend);
+          std::cerr << "HEATMAP05_RUN,enabled=1,backend="
+                    << (selected05.usedGpu ? "GPU" : "CPU")
+                    << ",created="
+                    << projected05.created << ",restaurants="
+                    << projected05.restaurantsWithOrders
+                    << ",grid=512x512,png=" << prefix05 << ".png\n";
+        } catch (const std::exception& heatmap05Error) {
+          // El diagnostico no puede cambiar el balance ni el exit de una
+          // simulacion correcta. El error siempre queda visible en stderr.
+          std::cerr << "HEATMAP05_RUN,enabled=0,error="
+                    << heatmap05Error.what() << '\n';
+        }
+      }
     }
 
     const double avgDeliveryMs =

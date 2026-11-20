@@ -3,6 +3,7 @@
 #include "analytics/DeliveryHistogram.hpp"
 #include "analytics/EtaReductionGpu.hpp"
 #include "analytics/RestaurantOrderScanGpu.hpp"
+#include "analytics/OrderHeatmapGpu05.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -48,6 +49,11 @@ class PropietarioGpuHistograma {
   // Feature 09: mismo hilo propietario para Scan de pedidos por restaurante.
   std::future<ResultadoScanGpu09> enviarScan09(
       std::vector<std::size_t> restauranteIds, std::size_t restaurantes);
+
+  // E4: Feature05 comparte la cola y el unico hilo propietario CUDA.
+  std::future<equipego::convolution05::GpuResult05> enviarHeatmap05(
+      equipego::convolution05::DemandGrid05 grid,
+      equipego::convolution05::GpuAlgorithm05 algorithm);
 
  private:
   void ejecutarCola();

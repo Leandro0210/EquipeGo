@@ -66,6 +66,24 @@ std::future<ResultadoScanGpu09> PropietarioGpuHistograma::enviarScan09(
   return futuro;
 }
 
+std::future<equipego::convolution05::GpuResult05>
+PropietarioGpuHistograma::enviarHeatmap05(
+    equipego::convolution05::DemandGrid05 grid,
+    equipego::convolution05::GpuAlgorithm05 algorithm) {
+  auto task = std::make_shared<std::packaged_task<equipego::convolution05::GpuResult05()>>(
+      [grid = std::move(grid), algorithm] {
+        return equipego::convolution05::gaussianGpu05(grid, algorithm);
+      });
+  auto result = task->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([task] { (*task)(); });
+  }
+  condicion_.notify_one();
+  return result;
+}
+
 void PropietarioGpuHistograma::ejecutarCola() {
   while (true) {
     std::function<void()> tarea;

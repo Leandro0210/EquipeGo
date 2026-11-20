@@ -449,3 +449,65 @@ if(USE_CUDA)
             equipego_histogram_gpu)
     endif()
 endif()
+
+# Feature 05 - Convolution de mapa de calor (CPU E1), sin tocar simulador.
+add_executable(test_order_heatmap05 tests/test_order_heatmap05.cpp)
+target_include_directories(test_order_heatmap05 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_order_heatmap05 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_order_heatmap05 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_order_heatmap05 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_order_heatmap05 COMMAND test_order_heatmap05)
+set_tests_properties(test_order_heatmap05 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_order_heatmap05 benchmarks/bench_order_heatmap05.cpp)
+    target_include_directories(bench_order_heatmap05 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_order_heatmap05 PRIVATE Threads::Threads)
+endif()
+
+# Feature 05 / Etapa 2 - EC2 05_conv. Opt-in GPU. Default remains CPU-only.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/OrderHeatmapCuda05.cu)
+    add_executable(test_order_heatmap_gpu05 tests/test_order_heatmap_gpu05.cpp)
+    target_include_directories(test_order_heatmap_gpu05 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_heatmap_gpu05 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_order_heatmap_gpu05 COMMAND test_order_heatmap_gpu05)
+    set_tests_properties(test_order_heatmap_gpu05 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_order_heatmap_gpu05
+            benchmarks/bench_order_heatmap_gpu05.cpp)
+        target_include_directories(bench_order_heatmap_gpu05 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_order_heatmap_gpu05 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature05 Etapa3: heatmap post-simulacion (CPU, opt-in) desde orderCreated.
+# No altera el dispatcher ni la semantica de pedidos y funciona sin CUDA.
+add_executable(test_heatmap_runtime05 tests/test_heatmap_runtime05.cpp)
+configure_equipego_target(test_heatmap_runtime05)
+add_test(NAME test_heatmap_runtime05 COMMAND test_heatmap_runtime05)
+set_tests_properties(test_heatmap_runtime05 PROPERTIES TIMEOUT 60)
+
+
+# Feature 05 / E4 - mapa real opcional GPU mediante propietario CUDA.
+add_executable(test_heatmap_gpu_dispatch05 tests/test_heatmap_gpu_dispatch05.cpp)
+target_include_directories(test_heatmap_gpu_dispatch05 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_heatmap_gpu_dispatch05 PRIVATE Threads::Threads)
+add_test(NAME test_heatmap_gpu_dispatch05 COMMAND test_heatmap_gpu_dispatch05)
+set_tests_properties(test_heatmap_gpu_dispatch05 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_heatmap_gpu_owner05 tests/test_heatmap_gpu_owner05.cpp)
+    target_include_directories(test_heatmap_gpu_owner05 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_heatmap_gpu_owner05 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_heatmap_gpu_owner05 COMMAND test_heatmap_gpu_owner05)
+    set_tests_properties(test_heatmap_gpu_owner05 PROPERTIES TIMEOUT 180)
+endif()
