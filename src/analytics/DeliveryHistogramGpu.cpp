@@ -135,6 +135,22 @@ std::future<ResultadoDemandaGpu11> PropietarioGpuHistograma::enviarDemanda11(
   return futuro;
 }
 
+std::future<ResultadoFiltroGpu12> PropietarioGpuHistograma::enviarFiltro12(
+    std::vector<std::uint64_t> esperasMs, std::uint64_t umbralMs) {
+  auto tarea = std::make_shared<std::packaged_task<ResultadoFiltroGpu12()>>(
+      [datos = std::move(esperasMs), umbralMs] {
+        return ejecutarFiltroEsperasGpu12(datos, umbralMs);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
 void PropietarioGpuHistograma::ejecutarCola() {
   while (true) {
     std::function<void()> tarea;

@@ -7,6 +7,7 @@
 #include "analytics/CourierCoverageGpu06.hpp"
 #include "analytics/CourierLoadReductionGpu10.hpp"
 #include "analytics/RestaurantDemandHistogramGpu11.hpp"
+#include "analytics/OrderWaitFilterGpu12.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -71,6 +72,10 @@ class PropietarioGpuHistograma {
   std::future<ResultadoDemandaGpu11> enviarDemanda11(
       std::vector<PedidoDemanda11> pedidos,
       std::size_t restaurantes, std::size_t franjas);
+
+  // Feature12: filtro estable de esperas; propietario CUDA unico.
+  std::future<ResultadoFiltroGpu12> enviarFiltro12(
+      std::vector<std::uint64_t> esperasMs, std::uint64_t umbralMs);
 
  private:
   void ejecutarCola();

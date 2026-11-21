@@ -4,6 +4,8 @@
 #include "analytics/CourierLoadGpuDispatch10.hpp"
 #include "analytics/RestaurantDemandLive11.hpp"
 #include "analytics/RestaurantDemandGpuDispatch11.hpp"
+#include "analytics/OrderWaitLive12.hpp"
+#include "analytics/OrderWaitGpuDispatch12.hpp"
 #include "analytics/DeliveryHistogram.hpp"
 #include "analytics/HeatmapRuntime05.hpp"
 #include "analytics/HeatmapGpuDispatch05.hpp"
@@ -799,6 +801,76 @@ int main(int argc, char *argv[]) {
         } catch (const std::exception& error11) {
           std::cerr << "HISTOGRAM11_RUN,enabled=0,error="
                     << error11.what() << '\n';
+        }
+      }
+    }
+
+    // Feature12 E4: filtro estable de esperas reales post-auditoria, opt-in.
+    // Hasta primera asignacion, rechazo o cierre de simulacion si pendiente.
+    if (const char* flag12 = std::getenv("EQUIPEGO_FILTER12")) {
+      const std::string modo12(flag12);
+      if (modo12 != "0" && modo12 != "1") {
+        std::cerr << "FILTER12_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo12 == "1") {
+        try {
+          const char* flagGpu12 = std::getenv("EQUIPEGO_FILTER12_GPU");
+          const std::string modoGpu12 = flagGpu12 ? std::string(flagGpu12) : "0";
+          if (modoGpu12 != "0" && modoGpu12 != "1")
+            throw std::invalid_argument("EQUIPEGO_FILTER12_GPU debe ser 0 o 1");
+          std::uint64_t umbral12 = 30000;
+          if (const char* valor12 = std::getenv("EQUIPEGO_FILTER12_UMBRAL_MS")) {
+            const std::string s12(valor12);
+            if (s12.empty() || s12.find_first_not_of("0123456789") != std::string::npos)
+              throw std::invalid_argument("Feature12: umbral no numerico");
+            std::size_t consumidos12 = 0;
+            umbral12 = std::stoull(s12, &consumidos12, 10);
+            if (consumidos12 != s12.size())
+              throw std::invalid_argument("Feature12: umbral invalido");
+          }
+          const auto capturado12 = equipego::analytics::capturarEsperasArchivo12(
+              config.logFilePath);
+          if (capturado12.pedidos.size() != audit.created)
+            throw std::logic_error("Feature12: capturas distintas de EventAudit");
+#ifdef EQUIPEGO_USE_CUDA
+          const auto elegido12 = equipego::analytics::seleccionarFiltro12(
+              capturado12.esperasMs, umbral12, modoGpu12 == "1", true,
+              [&propietarioGpu](std::vector<std::uint64_t> esperas,
+                               std::uint64_t umbral) {
+                return propietarioGpu.enviarFiltro12(std::move(esperas), umbral);
+              });
+#else
+          const auto elegido12 = equipego::analytics::seleccionarFiltro12(
+              capturado12.esperasMs, umbral12, modoGpu12 == "1", false);
+#endif
+          if (elegido12.filtro.totalEntradas != capturado12.pedidos.size() ||
+              elegido12.filtro.seleccionados() + elegido12.filtro.descartados() !=
+                  capturado12.pedidos.size())
+            throw std::logic_error("Feature12: balance del filtro invalido");
+          if (const char* csv12 = std::getenv("EQUIPEGO_FILTER12_CSV")) {
+            if (*csv12) {
+              std::ofstream salida12(csv12);
+              if (!salida12)
+                throw std::runtime_error("Feature12: no se puede crear CSV");
+              equipego::analytics::escribirFiltroCSV12(
+                  salida12, capturado12, elegido12.filtro);
+              salida12.flush();
+              if (!salida12) throw std::runtime_error("Feature12: CSV incompleto");
+            }
+          }
+          std::cerr << "FILTER12_RUN,enabled=1,backend=" << elegido12.backend
+                    << ",pedidos=" << elegido12.filtro.totalEntradas
+                    << ",seleccionados=" << elegido12.filtro.seleccionados()
+                    << ",descartados=" << elegido12.filtro.descartados()
+                    << ",asignados=" << capturado12.asignados
+                    << ",rechazados=" << capturado12.rechazados
+                    << ",pendientes=" << capturado12.pendientes
+                    << ",umbral_ms=" << umbral12
+                    << ",gpu_usada=" << (elegido12.gpuUsada ? 1 : 0)
+                    << ",fallback=" << elegido12.fallback
+                    << ",kernel_ms=" << elegido12.kernelMs
+                    << ",total_ms=" << elegido12.totalMs << '\n';
+        } catch (const std::exception& error12) {
+          std::cerr << "FILTER12_RUN,enabled=0,error=" << error12.what() << '\n';
         }
       }
     }

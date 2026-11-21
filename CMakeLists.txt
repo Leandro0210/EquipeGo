@@ -730,3 +730,67 @@ add_test(NAME test_restaurant_demand_live11 COMMAND test_restaurant_demand_live1
 set_tests_properties(test_restaurant_demand_live11 PROPERTIES TIMEOUT 60)
 
 
+# Feature 12 / Filter estable de esperas / CPU E1
+add_executable(test_order_wait_filter12 tests/test_order_wait_filter12.cpp)
+target_include_directories(test_order_wait_filter12 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_order_wait_filter12 PRIVATE Threads::Threads)
+add_test(NAME test_order_wait_filter12 COMMAND test_order_wait_filter12)
+set_tests_properties(test_order_wait_filter12 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_order_wait_filter12
+        benchmarks/bench_order_wait_filter12.cpp)
+    target_include_directories(bench_order_wait_filter12 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_order_wait_filter12 PRIVATE Threads::Threads)
+endif()
+
+
+# Feature 12 E2: stable CUDA filter/compaction, optional backend.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/OrderWaitFilterCuda12.cu)
+    add_executable(test_order_wait_filter_gpu12
+        tests/test_order_wait_filter_gpu12.cpp)
+    target_include_directories(test_order_wait_filter_gpu12 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_wait_filter_gpu12 PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_order_wait_filter_gpu12
+        COMMAND test_order_wait_filter_gpu12)
+    set_tests_properties(test_order_wait_filter_gpu12 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_order_wait_filter_gpu12
+            benchmarks/bench_order_wait_filter_gpu12.cpp)
+        target_include_directories(bench_order_wait_filter_gpu12 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_order_wait_filter_gpu12 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature12 Etapa3: selector/fallback CPU y propietario CUDA compartido.
+add_executable(test_order_wait_gpu_dispatch12
+    tests/test_order_wait_gpu_dispatch12.cpp)
+target_include_directories(test_order_wait_gpu_dispatch12 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_order_wait_gpu_dispatch12 PRIVATE Threads::Threads)
+add_test(NAME test_order_wait_gpu_dispatch12
+    COMMAND test_order_wait_gpu_dispatch12)
+set_tests_properties(test_order_wait_gpu_dispatch12 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_order_wait_gpu_owner12
+        tests/test_order_wait_gpu_owner12.cpp)
+    target_include_directories(test_order_wait_gpu_owner12 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_wait_gpu_owner12 PRIVATE
+        equipego_histogram_gpu Threads::Threads)
+    add_test(NAME test_order_wait_gpu_owner12 COMMAND test_order_wait_gpu_owner12)
+    set_tests_properties(test_order_wait_gpu_owner12 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature12 E4: filtro observacional de esperas en JSONL de simulacion real.
+add_executable(test_order_wait_live12 tests/test_order_wait_live12.cpp)
+configure_equipego_target(test_order_wait_live12)
+add_test(NAME test_order_wait_live12 COMMAND test_order_wait_live12)
+set_tests_properties(test_order_wait_live12 PROPERTIES TIMEOUT 60)
