@@ -5,6 +5,7 @@
 #include "analytics/RestaurantOrderScanGpu.hpp"
 #include "analytics/OrderHeatmapGpu05.hpp"
 #include "analytics/CourierCoverageGpu06.hpp"
+#include "analytics/CourierLayoutGpu04.hpp"
 #include "analytics/CourierLoadReductionGpu10.hpp"
 #include "analytics/RestaurantDemandHistogramGpu11.hpp"
 #include "analytics/OrderWaitFilterGpu12.hpp"
@@ -63,6 +64,14 @@ class PropietarioGpuHistograma {
   std::future<equipego::stencil06::ResultadoGpu06> enviarCobertura06(
       equipego::stencil06::Campo06 campo, unsigned int barridos,
       equipego::stencil06::VarianteGpu06 variante);
+
+  // E4 Feature04: ambas representaciones GPU se serializan en este hilo.
+  std::future<equipego::performance04::ResultadoGpu04> enviarLayoutAoS04(
+      std::vector<equipego::performance04::CourierAoS04> datos,
+      float rx, float ry, float tramo, unsigned int barridos);
+  std::future<equipego::performance04::ResultadoGpu04> enviarLayoutSoA04(
+      equipego::performance04::CourierSoA04 datos,
+      float rx, float ry, float tramo, unsigned int barridos);
 
   // Feature10: Reduction de carga; mismo hilo CUDA que 04/07/08/09.
   std::future<ResultadoCargaGpu10> enviarCarga10(

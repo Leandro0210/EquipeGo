@@ -102,6 +102,44 @@ PropietarioGpuHistograma::enviarCobertura06(
   return futuro;
 }
 
+std::future<equipego::performance04::ResultadoGpu04>
+PropietarioGpuHistograma::enviarLayoutAoS04(
+    std::vector<equipego::performance04::CourierAoS04> datos,
+    float rx, float ry, float tramo, unsigned int barridos) {
+  auto tarea = std::make_shared<std::packaged_task<equipego::performance04::ResultadoGpu04()>>(
+      [datos = std::move(datos), rx, ry, tramo, barridos] {
+        return equipego::performance04::calcularAoSGpu04(
+            datos, rx, ry, tramo, barridos);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
+std::future<equipego::performance04::ResultadoGpu04>
+PropietarioGpuHistograma::enviarLayoutSoA04(
+    equipego::performance04::CourierSoA04 datos,
+    float rx, float ry, float tramo, unsigned int barridos) {
+  auto tarea = std::make_shared<std::packaged_task<equipego::performance04::ResultadoGpu04()>>(
+      [datos = std::move(datos), rx, ry, tramo, barridos] {
+        return equipego::performance04::calcularSoAGpu04(
+            datos, rx, ry, tramo, barridos);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
 std::future<ResultadoCargaGpu10> PropietarioGpuHistograma::enviarCarga10(
     std::vector<std::uint32_t> reservas) {
   auto tarea = std::make_shared<std::packaged_task<ResultadoCargaGpu10()>>(

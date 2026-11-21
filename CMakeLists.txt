@@ -588,6 +588,34 @@ if(USE_CUDA)
         COMMAND test_courier_coverage_gpu_owner06)
     set_tests_properties(test_courier_coverage_gpu_owner06 PROPERTIES TIMEOUT 180)
 endif()
+
+# Feature04 Etapa 3: captura real observacional de Fleet, CPU opt-in.
+add_executable(test_courier_layout_runtime04
+    tests/test_courier_layout_runtime04.cpp)
+configure_equipego_target(test_courier_layout_runtime04)
+add_test(NAME test_courier_layout_runtime04 COMMAND test_courier_layout_runtime04)
+set_tests_properties(test_courier_layout_runtime04 PROPERTIES TIMEOUT 60)
+
+# Feature04 E4: fallback CPU y dispatch del propietario GPU (sin CUDA requerida).
+add_executable(test_courier_layout_gpu_dispatch04
+    tests/test_courier_layout_gpu_dispatch04.cpp)
+target_include_directories(test_courier_layout_gpu_dispatch04 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_layout_gpu_dispatch04 PRIVATE Threads::Threads)
+add_test(NAME test_courier_layout_gpu_dispatch04
+    COMMAND test_courier_layout_gpu_dispatch04)
+set_tests_properties(test_courier_layout_gpu_dispatch04 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_courier_layout_gpu_owner04
+        tests/test_courier_layout_gpu_owner04.cpp)
+    target_include_directories(test_courier_layout_gpu_owner04 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_layout_gpu_owner04 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_layout_gpu_owner04
+        COMMAND test_courier_layout_gpu_owner04)
+    set_tests_properties(test_courier_layout_gpu_owner04 PROPERTIES TIMEOUT 180)
+endif()
+
 # Feature 10 / Etapa 1: reduction estadistica de cargas (solo CPU).
 # No altera dispatcher ni el propietario GPU actual.
 add_executable(test_courier_load_reduction10

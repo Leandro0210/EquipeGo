@@ -1,5 +1,7 @@
 #include "analytics/CoverageGpuDispatch06.hpp"
 #include "analytics/CourierCoverageRuntime06.hpp"
+#include "analytics/CourierLayoutRuntime04.hpp"
+#include "analytics/CourierLayoutGpuDispatch04.hpp"
 #include "analytics/CourierLoadLive10.hpp"
 #include "analytics/CourierLoadGpuDispatch10.hpp"
 #include "analytics/RestaurantDemandLive11.hpp"
@@ -668,6 +670,71 @@ int main(int argc, char *argv[]) {
 
     fleet.requestStop();
     fleet.join();
+
+    // Feature04 E3: snapshot real del Fleet terminado (observacional).
+    // La comparacion AoS/SoA NO sustituye el ETA vial del Dispatcher.
+    if (const char* flag04 = std::getenv("EQUIPEGO_LAYOUT04")) {
+      const std::string modo04(flag04);
+      if (modo04 != "0" && modo04 != "1") {
+        std::cerr << "LAYOUT04_RUNTIME,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo04 == "1") {
+        try {
+          const auto registros04 = equipego::performance04::capturarFleet04(
+              config, fleet);
+          const auto diagnostico04 =
+              equipego::performance04::compararLayoutRuntime04(config, registros04);
+          std::cerr << "LAYOUT04_RUNTIME,enabled=1,source=Fleet_post_join"
+                    << ",couriers=" << diagnostico04.couriers
+                    << ",disponibles=" << diagnostico04.disponibles
+                    << ",equivalencia_AoS_SoA=OK,eta_oficial=NO"
+                    << ",modifica_dispatch=NO\n";
+          // E4: GPU opcional en la misma cola de Histogram/Reduction/Scan.
+          // El ETA oficial y los pedidos no dependen de este diagnostico.
+          const char* flagGpu04 = std::getenv("EQUIPEGO_LAYOUT04_GPU");
+          const std::string modoGpu04 = flagGpu04 ? flagGpu04 : "0";
+          if (modoGpu04 != "0" && modoGpu04 != "1")
+            throw std::invalid_argument("EQUIPEGO_LAYOUT04_GPU debe ser 0 o 1");
+          if (modoGpu04 == "1") {
+            const auto [lat04, lon04] = equipego::performance04::nodoLatLon04(
+                config, config.restaurants.front().nodeId);
+            const auto destino04 = equipego::performance04::proyectarMetros04(
+                config, lat04, lon04);
+#ifdef EQUIPEGO_USE_CUDA
+            const auto gpu04 = equipego::performance04::seleccionarLayoutGpu04(
+                registros04, destino04.x, destino04.y, 0.0f, 1, true, true,
+                [&propietarioGpu](std::vector<equipego::performance04::CourierAoS04> v,
+                                  float x, float y, float tramo, unsigned barridos) {
+                  return propietarioGpu.enviarLayoutAoS04(
+                      std::move(v), x, y, tramo, barridos);
+                },
+                [&propietarioGpu](equipego::performance04::CourierSoA04 v,
+                                  float x, float y, float tramo, unsigned barridos) {
+                  return propietarioGpu.enviarLayoutSoA04(
+                      std::move(v), x, y, tramo, barridos);
+                });
+#else
+            const auto gpu04 = equipego::performance04::seleccionarLayoutGpu04(
+                registros04, destino04.x, destino04.y, 0.0f, 1, true, false);
+#endif
+            if (gpu04.usada) {
+              std::cerr << "LAYOUT04_GPU_OWNER,backend=GPU,verified=1,couriers="
+                        << gpu04.couriers << ",aos_kernel_ms="
+                        << gpu04.aosKernelMs << ",aos_total_ms="
+                        << gpu04.aosTotalMs << ",soa_kernel_ms="
+                        << gpu04.soaKernelMs << ",soa_total_ms="
+                        << gpu04.soaTotalMs << ",max_error="
+                        << gpu04.maxError << ",eta_oficial=NO\n";
+            } else {
+              std::cerr << "LAYOUT04_GPU_FALLBACK,backend=CPU,reason="
+                        << gpu04.fallback << ",modifica_dispatch=NO\n";
+            }
+          }
+        } catch (const std::exception& error04) {
+          std::cerr << "LAYOUT04_RUNTIME,enabled=0,fallback=sin_diagnostico,motivo="
+                    << error04.what() << '\n';
+        }
+      }
+    }
 
     std::vector<CourierOrderResult> fleetResults = fleet.takeFinishedOrders();
     const std::size_t fleetFinalizedCount = fleetResults.size();
