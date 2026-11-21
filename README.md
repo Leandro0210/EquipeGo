@@ -4,7 +4,140 @@
 
 EquipeGo simula una flota de repartidores independientes, un generador de pedidos por ráfagas, un despachador con cálculo concurrente de ETA, recursos de recogida limitados, averías y rescate de pedidos. La interfaz se dibuja con OpenCV sobre una imagen del mapa de Equipetrol. La corrección se contrasta con un registro JSONL y un resumen final.
 
-> **Versión verificada de entrega:** código `0b51082` (rama `avance-12`); evidencias finales publicadas en `6dd487b`, sin cambios de código entre ambos commits. Se comprobó compilación desde clon limpio, 30/30 pruebas CTest y 12/12 ejecuciones con sanitizadores. `delivery_sim` acepta únicamente `config.json` y `--log RUTA`, y siempre abre OpenCV; `delivery_sim_bench` es un target auxiliar opcional para los experimentos.
+> **Referencia histórica del Bloque 1:** código `0b51082` (rama `avance-12`); evidencias finales publicadas en `6dd487b`, sin cambios de código entre ambos commits. Se comprobó compilación desde clon limpio, 30/30 pruebas CTest y 12/12 ejecuciones con sanitizadores. `delivery_sim` acepta únicamente `config.json` y `--log RUTA`, y siempre abre OpenCV; `delivery_sim_bench` es un target auxiliar opcional para los experimentos.
+
+## Bloque 2 — Implementaciones CUDA
+
+Esta rama incorpora diez implementaciones de paralelismo GPU,
+con alternativas CPU y pruebas de equivalencia.
+
+### Funcionalidades desarrolladas
+
+| Feature | Concepto CUDA | Aplicación en EquipeGo |
+|---|---|---|
+| 03 | Memory Tiling | Tabla de rutas Floyd–Warshall |
+| 04 | Performance / AoS vs SoA | Datos de repartidores optimizados |
+| 05 | Convolution | Mapa de calor de demanda |
+| 06 | Stencil | Campo de cobertura de repartidores |
+| 07 | Histogram | Histograma de tiempos de entrega |
+| 08 | Reduction | Selección del menor ETA |
+| 09 | Scan | Agrupación estable por restaurante |
+| 10 | Reduction adicional | Estadísticas de carga de repartidores |
+| 11 | Histogram adicional | Demanda por restaurante y franja |
+| 12 | Filter | Filtrado de pedidos por espera |
+
+La numeración de Features 10–12 no corresponde a los
+conceptos 10–12 de la rúbrica original. Estas tres Features
+son aplicaciones adicionales de patrones CUDA.
+
+### Requisitos
+
+- C++17, CMake 3.11+, OpenCV 4.1+ y nlohmann/json.
+- Linux/WSL2 para las pruebas CPU.
+- CUDA Toolkit y GPU NVIDIA para las pruebas GPU.
+- Google Colab con NVIDIA T4 para los benchmarks CUDA.
+
+La compilación predeterminada no necesita CUDA.
+
+### Compilación CPU
+
+Desde la raíz del repositorio:
+
+```bash
+cmake -S . -B "$HOME/equipego-b2-cpu" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DUSE_CUDA=OFF \
+  -DEQUIPEGO_BUILD_BENCHMARK=ON
+
+cmake --build "$HOME/equipego-b2-cpu" -j 4
+
+ctest --test-dir "$HOME/equipego-b2-cpu" \
+  --output-on-failure
+```
+
+### Ejecutar la simulación sin ventana
+
+```bash
+"$HOME/equipego-b2-cpu/delivery_sim_bench" \
+  config/equipetrol.json \
+  --headless \
+  --duration 120 \
+  --scale 60 \
+  --log "$HOME/equipego-b2-cpu/eventos_cpu.jsonl"
+```
+
+Para ejecutar la versión gráfica, con OpenCV y una
+pantalla disponible:
+
+```bash
+"$HOME/equipego-b2-cpu/delivery_sim" \
+  config/equipetrol.json
+```
+
+### Compilación GPU
+
+En un entorno con CUDA Toolkit y GPU NVIDIA:
+
+```bash
+cmake -S . -B "$HOME/equipego-b2-gpu" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DUSE_CUDA=ON \
+  -DEQUIPEGO_BUILD_BENCHMARK=ON
+
+cmake --build "$HOME/equipego-b2-gpu" -j 4
+
+ctest --test-dir "$HOME/equipego-b2-gpu" \
+  --output-on-failure
+```
+
+### Ejecutar la simulación con CUDA disponible
+
+```bash
+"$HOME/equipego-b2-gpu/delivery_sim_bench" \
+  config/equipetrol.json \
+  --headless \
+  --duration 120 \
+  --scale 60 \
+  --log "$HOME/equipego-b2-gpu/eventos_gpu.jsonl"
+```
+
+La disponibilidad de CUDA no significa que todas las
+Features ejecuten kernels GPU en cada simulación.
+Algunas se activan según umbrales de carga o flags
+experimentales.
+
+### Benchmarks y reproducción
+
+El ejecutable `delivery_sim_bench` admite `--headless`,
+`--duration`, `--scale` y `--log`.
+
+No implementa literalmente una opción global `--bench`.
+Los benchmarks de cada algoritmo son ejecutables
+especializados y sus instrucciones se encuentran en
+`benchmarks/` y en los README de `bloque2_cuda/`.
+
+Las comparaciones contemplan:
+
+- CPU secuencial (1 hilo).
+- CPU multihilo, con barrido de hilos.
+- GPU kernel, sin transferencias.
+- GPU end-to-end, incluyendo transferencias.
+- Medianas, dispersión, speedup y correctitud.
+- Nsight Systems, Nsight Compute y compute-sanitizer.
+
+Las evidencias voluminosas (CSV, perfiles, ZIP y gráficas)
+se almacenan fuera del repositorio. Para reproducir
+exactamente sus cifras se necesitan esos archivos y
+la configuración urbana original de cada experimento.
+
+Se probó además una ciudad de 3.516 nodos y hasta
+2.000 repartidores. En el escenario de alta demanda
+se crearon 508 pedidos, con 11 entregados, 97 rechazados
+y 400 pendientes al cierre. Esa ejecución verifica el
+balance de pedidos, pero no demuestra por sí sola
+una aceleración GPU del sistema completo.
+
+---
 
 ## 1. Requisitos, dependencias y compilación (DP.0)
 
