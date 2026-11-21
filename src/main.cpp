@@ -1,5 +1,7 @@
 #include "analytics/CoverageGpuDispatch06.hpp"
 #include "analytics/CourierCoverageRuntime06.hpp"
+#include "analytics/CourierLoadLive10.hpp"
+#include "analytics/CourierLoadGpuDispatch10.hpp"
 #include "analytics/DeliveryHistogram.hpp"
 #include "analytics/HeatmapRuntime05.hpp"
 #include "analytics/HeatmapGpuDispatch05.hpp"
@@ -614,6 +616,51 @@ int main(int argc, char *argv[]) {
     const std::size_t assignedCount = dispatcher.getAssignedCount();
     const std::size_t dispatcherRejected = dispatcher.getRejectedCount();
     const std::size_t dispatcherPending = dispatcher.getPendingCount();
+
+    // Feature10 E4: muestra observacional al terminar Dispatcher, ANTES de
+    // detener Fleet. Los couriers siguen vivos; snapshot individual por mutex.
+    // Desactivado por defecto. No modifica pedidos, ETA ni Dispatcher.
+    if (const char* flag10 = std::getenv("EQUIPEGO_LOAD10")) {
+      const std::string modo10(flag10);
+      if (modo10 != "0" && modo10 != "1") {
+        std::cerr << "REDUCTION10_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo10 == "1") {
+        try {
+          const char* flagGpu10 = std::getenv("EQUIPEGO_LOAD10_GPU");
+          const std::string modoGpu10 = flagGpu10 ? std::string(flagGpu10) : "0";
+          if (modoGpu10 != "0" && modoGpu10 != "1")
+            throw std::invalid_argument("EQUIPEGO_LOAD10_GPU debe ser 0 o 1");
+          const auto captura10 = equipego::analytics::capturarCargaFleet10(fleet);
+#ifdef EQUIPEGO_USE_CUDA
+          const auto seleccion10 = equipego::analytics::seleccionarCarga10(
+              captura10.reservas, modoGpu10 == "1", true,
+              [&propietarioGpu](std::vector<std::uint32_t> reservas10) {
+                return propietarioGpu.enviarCarga10(std::move(reservas10));
+              });
+#else
+          const auto seleccion10 = equipego::analytics::seleccionarCarga10(
+              captura10.reservas, modoGpu10 == "1", false);
+#endif
+          const auto& r10 = seleccion10.resumen;
+          const std::string idMax10 = r10.tieneMax
+              ? captura10.courierIds.at(r10.indiceMax) : "NINGUNO";
+          std::cerr << "REDUCTION10_RUN,enabled=1,backend="
+                    << seleccion10.backend << ",couriers=" << r10.couriers
+                    << ",con_pedidos=" << r10.conPedidos
+                    << ",total_reservas=" << r10.totalReservas
+                    << ",max_reservas=" << r10.maxReservas
+                    << ",courier_max=" << idMax10
+                    << ",promedio=" << r10.promedio()
+                    << ",gpu_usada=" << (seleccion10.gpuUsada ? 1 : 0)
+                    << ",fallback=" << seleccion10.fallback
+                    << ",kernel_ms=" << seleccion10.kernelMs
+                    << ",total_ms=" << seleccion10.totalMs << '\n';
+        } catch (const std::exception& error10) {
+          std::cerr << "REDUCTION10_RUN,enabled=0,error="
+                    << error10.what() << '\n';
+        }
+      }
+    }
 
     fleet.requestStop();
     fleet.join();

@@ -588,3 +588,77 @@ if(USE_CUDA)
         COMMAND test_courier_coverage_gpu_owner06)
     set_tests_properties(test_courier_coverage_gpu_owner06 PROPERTIES TIMEOUT 180)
 endif()
+# Feature 10 / Etapa 1: reduction estadistica de cargas (solo CPU).
+# No altera dispatcher ni el propietario GPU actual.
+add_executable(test_courier_load_reduction10
+    tests/test_courier_load_reduction10.cpp)
+target_include_directories(test_courier_load_reduction10 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_load_reduction10 PRIVATE Threads::Threads)
+add_test(NAME test_courier_load_reduction10
+    COMMAND test_courier_load_reduction10)
+set_tests_properties(test_courier_load_reduction10 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_courier_load_reduction10
+        benchmarks/bench_courier_load_reduction10.cpp)
+    target_include_directories(bench_courier_load_reduction10 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_courier_load_reduction10 PRIVATE Threads::Threads)
+endif()
+
+# Feature 10 / Etapa 2: reduccion GPU opt-in, independiente de ETA08.
+# El hilo propietario compartido se conecta en la Etapa 3; no alterar Dispatcher.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/CourierLoadReductionCuda10.cu)
+    add_executable(test_courier_load_reduction_gpu10
+        tests/test_courier_load_reduction_gpu10.cpp)
+    target_include_directories(test_courier_load_reduction_gpu10 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_load_reduction_gpu10 PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_courier_load_reduction_gpu10
+        COMMAND test_courier_load_reduction_gpu10)
+    set_tests_properties(test_courier_load_reduction_gpu10 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_courier_load_reduction_gpu10
+            benchmarks/bench_courier_load_reduction_gpu10.cpp)
+        target_include_directories(bench_courier_load_reduction_gpu10 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_courier_load_reduction_gpu10 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature10 Etapa3: CPU fallback y propietario CUDA compartido.
+# No altera Dispatcher ni la politica ETA oficial.
+add_executable(test_courier_load_gpu_dispatch10
+    tests/test_courier_load_gpu_dispatch10.cpp)
+target_include_directories(test_courier_load_gpu_dispatch10 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_load_gpu_dispatch10 PRIVATE Threads::Threads)
+add_test(NAME test_courier_load_gpu_dispatch10
+    COMMAND test_courier_load_gpu_dispatch10)
+set_tests_properties(test_courier_load_gpu_dispatch10 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_courier_load_gpu_owner10
+        tests/test_courier_load_gpu_owner10.cpp)
+    target_include_directories(test_courier_load_gpu_owner10 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_load_gpu_owner10 PRIVATE
+        equipego_histogram_gpu Threads::Threads)
+    add_test(NAME test_courier_load_gpu_owner10
+        COMMAND test_courier_load_gpu_owner10)
+    set_tests_properties(test_courier_load_gpu_owner10 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature10 E4: adaptador observacional de instantaneas del Fleet real.
+add_executable(test_courier_load_live10 tests/test_courier_load_live10.cpp)
+target_include_directories(test_courier_load_live10 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(test_courier_load_live10 PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(test_courier_load_live10 PRIVATE Threads::Threads ${OpenCV_LIBS})
+add_test(NAME test_courier_load_live10 COMMAND test_courier_load_live10)
+set_tests_properties(test_courier_load_live10 PROPERTIES TIMEOUT 60)
+
+

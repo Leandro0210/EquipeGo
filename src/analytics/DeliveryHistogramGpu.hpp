@@ -5,6 +5,7 @@
 #include "analytics/RestaurantOrderScanGpu.hpp"
 #include "analytics/OrderHeatmapGpu05.hpp"
 #include "analytics/CourierCoverageGpu06.hpp"
+#include "analytics/CourierLoadReductionGpu10.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -60,6 +61,10 @@ class PropietarioGpuHistograma {
   std::future<equipego::stencil06::ResultadoGpu06> enviarCobertura06(
       equipego::stencil06::Campo06 campo, unsigned int barridos,
       equipego::stencil06::VarianteGpu06 variante);
+
+  // Feature10: Reduction de carga; mismo hilo CUDA que 04/07/08/09.
+  std::future<ResultadoCargaGpu10> enviarCarga10(
+      std::vector<std::uint32_t> reservas);
 
  private:
   void ejecutarCola();
