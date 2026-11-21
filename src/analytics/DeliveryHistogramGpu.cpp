@@ -118,6 +118,23 @@ std::future<ResultadoCargaGpu10> PropietarioGpuHistograma::enviarCarga10(
   return futuro;
 }
 
+std::future<ResultadoDemandaGpu11> PropietarioGpuHistograma::enviarDemanda11(
+    std::vector<PedidoDemanda11> pedidos,
+    std::size_t restaurantes, std::size_t franjas) {
+  auto tarea = std::make_shared<std::packaged_task<ResultadoDemandaGpu11()>>(
+      [datos = std::move(pedidos), restaurantes, franjas] {
+        return ejecutarHistogramaDemandaGpu11(datos, restaurantes, franjas);
+      });
+  auto futuro = tarea->get_future();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (detener_) throw std::runtime_error("Cola CUDA detenida");
+    cola_.emplace([tarea] { (*tarea)(); });
+  }
+  condicion_.notify_one();
+  return futuro;
+}
+
 void PropietarioGpuHistograma::ejecutarCola() {
   while (true) {
     std::function<void()> tarea;

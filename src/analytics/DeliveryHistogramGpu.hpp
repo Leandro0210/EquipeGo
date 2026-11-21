@@ -6,6 +6,7 @@
 #include "analytics/OrderHeatmapGpu05.hpp"
 #include "analytics/CourierCoverageGpu06.hpp"
 #include "analytics/CourierLoadReductionGpu10.hpp"
+#include "analytics/RestaurantDemandHistogramGpu11.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -65,6 +66,11 @@ class PropietarioGpuHistograma {
   // Feature10: Reduction de carga; mismo hilo CUDA que 04/07/08/09.
   std::future<ResultadoCargaGpu10> enviarCarga10(
       std::vector<std::uint32_t> reservas);
+
+  // Feature11: histograma de demanda; cola CUDA compartida.
+  std::future<ResultadoDemandaGpu11> enviarDemanda11(
+      std::vector<PedidoDemanda11> pedidos,
+      std::size_t restaurantes, std::size_t franjas);
 
  private:
   void ejecutarCola();

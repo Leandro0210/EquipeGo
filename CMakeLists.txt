@@ -662,3 +662,71 @@ add_test(NAME test_courier_load_live10 COMMAND test_courier_load_live10)
 set_tests_properties(test_courier_load_live10 PROPERTIES TIMEOUT 60)
 
 
+# Feature 11 / Histogram demanda por restaurante y franja / CPU E1
+add_executable(test_restaurant_demand_histogram11
+    tests/test_restaurant_demand_histogram11.cpp)
+target_include_directories(test_restaurant_demand_histogram11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_demand_histogram11 PRIVATE Threads::Threads)
+add_test(NAME test_restaurant_demand_histogram11
+    COMMAND test_restaurant_demand_histogram11)
+set_tests_properties(test_restaurant_demand_histogram11 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_restaurant_demand_histogram11
+        benchmarks/bench_restaurant_demand_histogram11.cpp)
+    target_include_directories(bench_restaurant_demand_histogram11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_restaurant_demand_histogram11 PRIVATE Threads::Threads)
+endif()
+
+# Feature 11 E2: histograma 2D de demanda por restaurante/franja, GPU opt-in.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/RestaurantDemandHistogramCuda11.cu)
+    add_executable(test_restaurant_demand_histogram_gpu11
+        tests/test_restaurant_demand_histogram_gpu11.cpp)
+    target_include_directories(test_restaurant_demand_histogram_gpu11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_restaurant_demand_histogram_gpu11 PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_restaurant_demand_histogram_gpu11
+        COMMAND test_restaurant_demand_histogram_gpu11)
+    set_tests_properties(test_restaurant_demand_histogram_gpu11 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_restaurant_demand_histogram_gpu11
+            benchmarks/bench_restaurant_demand_histogram_gpu11.cpp)
+        target_include_directories(bench_restaurant_demand_histogram_gpu11 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_restaurant_demand_histogram_gpu11 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature11 Etapa3: seleccion CPU/GPU y cola del propietario CUDA unico.
+add_executable(test_restaurant_demand_gpu_dispatch11
+    tests/test_restaurant_demand_gpu_dispatch11.cpp)
+target_include_directories(test_restaurant_demand_gpu_dispatch11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_demand_gpu_dispatch11 PRIVATE Threads::Threads)
+add_test(NAME test_restaurant_demand_gpu_dispatch11
+    COMMAND test_restaurant_demand_gpu_dispatch11)
+set_tests_properties(test_restaurant_demand_gpu_dispatch11 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_restaurant_demand_gpu_owner11
+        tests/test_restaurant_demand_gpu_owner11.cpp)
+    target_include_directories(test_restaurant_demand_gpu_owner11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_restaurant_demand_gpu_owner11 PRIVATE
+        equipego_histogram_gpu Threads::Threads)
+    add_test(NAME test_restaurant_demand_gpu_owner11
+        COMMAND test_restaurant_demand_gpu_owner11)
+    set_tests_properties(test_restaurant_demand_gpu_owner11 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature11 E4: captura observacional del JSONL real tras EventAudit.
+add_executable(test_restaurant_demand_live11 tests/test_restaurant_demand_live11.cpp)
+configure_equipego_target(test_restaurant_demand_live11)
+add_test(NAME test_restaurant_demand_live11 COMMAND test_restaurant_demand_live11)
+set_tests_properties(test_restaurant_demand_live11 PROPERTIES TIMEOUT 60)
+
+

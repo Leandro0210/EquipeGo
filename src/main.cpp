@@ -2,6 +2,8 @@
 #include "analytics/CourierCoverageRuntime06.hpp"
 #include "analytics/CourierLoadLive10.hpp"
 #include "analytics/CourierLoadGpuDispatch10.hpp"
+#include "analytics/RestaurantDemandLive11.hpp"
+#include "analytics/RestaurantDemandGpuDispatch11.hpp"
 #include "analytics/DeliveryHistogram.hpp"
 #include "analytics/HeatmapRuntime05.hpp"
 #include "analytics/HeatmapGpuDispatch05.hpp"
@@ -727,6 +729,78 @@ int main(int argc, char *argv[]) {
         audit.created - audit.delivered - audit.rejected;
     if (pendingFromEvents != pendingCount) {
       throw std::logic_error("Los pedidos pendientes no coinciden");
+    }
+
+    // Feature11 E4: histograma 2D de orderCreated reales en el JSONL YA
+    // auditado. Analisis observacional al terminar la simulacion; opt-in.
+    if (const char* flag11 = std::getenv("EQUIPEGO_HIST11")) {
+      const std::string modo11(flag11);
+      if (modo11 != "0" && modo11 != "1") {
+        std::cerr << "HISTOGRAM11_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo11 == "1") {
+        try {
+          const char* flagGpu11 = std::getenv("EQUIPEGO_HIST11_GPU");
+          const std::string modoGpu11 = flagGpu11 ? std::string(flagGpu11) : "0";
+          if (modoGpu11 != "0" && modoGpu11 != "1")
+            throw std::invalid_argument("EQUIPEGO_HIST11_GPU debe ser 0 o 1");
+          std::vector<std::string> ids11;
+          ids11.reserve(config.restaurants.size());
+          for (const auto& r11 : config.restaurants) ids11.push_back(r11.id);
+          constexpr std::uint64_t franjaMs11 = 60000;
+          const auto capturado11 = equipego::analytics::capturarDemandaArchivo11(
+              config.logFilePath, ids11, franjaMs11);
+          if (capturado11.pedidos.size() != audit.created)
+            throw std::logic_error("Feature11: total distinto de EventAudit");
+#ifdef EQUIPEGO_USE_CUDA
+          const auto seleccionado11 = equipego::analytics::seleccionarDemanda11(
+              capturado11.pedidos, ids11.size(), capturado11.franjas,
+              modoGpu11 == "1", true,
+              [&propietarioGpu](std::vector<equipego::analytics::PedidoDemanda11> p,
+                               std::size_t r, std::size_t f) {
+                return propietarioGpu.enviarDemanda11(std::move(p), r, f);
+              });
+#else
+          const auto seleccionado11 = equipego::analytics::seleccionarDemanda11(
+              capturado11.pedidos, ids11.size(), capturado11.franjas,
+              modoGpu11 == "1", false);
+#endif
+          const auto& h11 = seleccionado11.histograma;
+          for (std::size_t i11 = 0; i11 < ids11.size(); ++i11) {
+            const auto found11 = audit.createdPerRestaurant.find(ids11[i11]);
+            const std::size_t auditCount11 = found11 == audit.createdPerRestaurant.end()
+                ? 0u : found11->second;
+            if (h11.porRestaurante[i11] != auditCount11)
+              throw std::logic_error("Feature11: conteo distinto de EventAudit");
+          }
+          std::size_t mayor11 = 0;
+          for (std::size_t i11 = 1; i11 < ids11.size(); ++i11)
+            if (h11.porRestaurante[i11] > h11.porRestaurante[mayor11])
+              mayor11 = i11;
+          if (const char* rutaCsv11 = std::getenv("EQUIPEGO_HIST11_CSV")) {
+            if (*rutaCsv11) {
+              std::ofstream salida11(rutaCsv11);
+              if (!salida11) throw std::runtime_error("Feature11: no se puede crear CSV");
+              equipego::analytics::escribirDemandaCSV11(
+                  salida11, h11, ids11, franjaMs11);
+              salida11.flush();
+              if (!salida11) throw std::runtime_error("Feature11: escritura CSV fallida");
+            }
+          }
+          std::cerr << "HISTOGRAM11_RUN,enabled=1,backend=" << seleccionado11.backend
+                    << ",pedidos=" << h11.totalPedidos
+                    << ",restaurantes=" << h11.restaurantes
+                    << ",franjas=" << h11.franjas << ",franja_ms=" << franjaMs11
+                    << ",top_restaurante=" << ids11.at(mayor11)
+                    << ",top_pedidos=" << h11.porRestaurante.at(mayor11)
+                    << ",gpu_usada=" << (seleccionado11.gpuUsada ? 1 : 0)
+                    << ",fallback=" << seleccionado11.fallback
+                    << ",kernel_ms=" << seleccionado11.kernelMs
+                    << ",total_ms=" << seleccionado11.totalMs << '\n';
+        } catch (const std::exception& error11) {
+          std::cerr << "HISTOGRAM11_RUN,enabled=0,error="
+                    << error11.what() << '\n';
+        }
+      }
     }
 
     // Feature06 E4: eleccion observacional CPU/GPU con referencia CPU
