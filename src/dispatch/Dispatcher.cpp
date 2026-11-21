@@ -1,3 +1,4 @@
+#include "analytics/EtaDispatchOrder.hpp"
 #include "dispatch/Dispatcher.hpp"
 #include "dispatch/SharedDistanceCache.hpp"
 
@@ -131,7 +132,7 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
                                        const std::string &restaurantNode,
                                        const std::string &deliveryNode) -> double {
       const auto toRestaurant =
-          this->roadNetwork.shortestRoute(startNode, restaurantNode);
+          this->roadNetwork.shortestDistanceMeters(startNode, restaurantNode);
       if (!toRestaurant) {
         throw std::runtime_error("No existe una ruta valida");
       }
@@ -140,15 +141,15 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
           restaurantNode, deliveryNode, [this, &restaurantNode,
                                          &deliveryNode]() -> double {
             const auto route =
-                this->roadNetwork.shortestRoute(restaurantNode, deliveryNode);
+                this->roadNetwork.shortestDistanceMeters(restaurantNode, deliveryNode);
             if (!route) {
               throw std::runtime_error("No existe una ruta valida");
             }
-            return route->distanceMeters;
+            return *route;
           });
 
       const double distanceMeters =
-          toRestaurant->distanceMeters + toCustomerMeters;
+          *toRestaurant + toCustomerMeters;
       const double speedMetersPerSecond = this->config.fleet.speedKmh / 3.6;
       return distanceMeters / speedMetersPerSecond;
     };
@@ -159,6 +160,16 @@ Dispatcher::Dispatcher(const SimulationConfig &config,
   const std::size_t workerCount = std::max<std::size_t>(
       1, std::min<std::size_t>(fleet.size(), std::min<std::size_t>(hardware, 8)));
   executor = std::make_unique<QuoteExecutor>(workerCount);
+}
+
+void Dispatcher::setGpuEtaSubmitter(
+    equipego::analytics::EnviarReduccionGpu08 submitter,
+    std::size_t minimoCandidatos) {
+  if (!submitter || minimoCandidatos == 0) {
+    throw std::invalid_argument("Configuracion GPU08 no valida");
+  }
+  gpuEtaSubmitter = std::move(submitter);
+  gpuMinQuotes = minimoCandidatos;
 }
 
 Dispatcher::~Dispatcher() = default;
@@ -257,14 +268,9 @@ QuoteBatch Dispatcher::quoteCandidates(const Order &order) const {
 std::optional<std::string> Dispatcher::assignBestCourier(Order &order) const {
   QuoteBatch batch = quoteCandidates(order);
 
-  std::sort(batch.quotes.begin(), batch.quotes.end(),
-            [](const EtaQuote &a, const EtaQuote &b) {
-              if (a.etaSimulatedSeconds != b.etaSimulatedSeconds) {
-                return a.etaSimulatedSeconds < b.etaSimulatedSeconds;
-              }
-              return a.courierIndex < b.courierIndex;
-            });
-
+  // Misma regla determinista que DispatchLoop: (ETA, courierId).
+  // Si un repartidor no puede aceptar la orden, probar los restantes.
+  equipego::analytics::ordenarCotizacionesPorReduccion(batch.quotes);
   for (const EtaQuote &quote : batch.quotes) {
     Courier &courier = fleet.at(quote.courierIndex);
     if (courier.tryAssignOrder(std::move(order))) {

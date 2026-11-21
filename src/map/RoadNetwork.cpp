@@ -1,7 +1,11 @@
 
 #include "map/RoadNetwork.hpp"
+#include "map/FloydWarshallTiled03.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <memory>
+#include <stdexcept>
 #include <functional>
 #include <limits>
 #include <queue>
@@ -20,6 +24,49 @@ RoadNetwork::RoadNetwork(const SimulationConfig &config) {
       adjacency[street.to].push_back(Edge{street.from, street.lengthMeters});
     }
   }
+}
+
+
+// El camino geometrico sigue siendo Dijkstra. Esta operacion retorna solo metros.
+std::optional<double> RoadNetwork::shortestDistanceMeters(
+    const std::string &from, const std::string &to) const {
+  if (floyd03_) return floyd03_->distanciaMetros(from, to);
+  const auto ruta = shortestRoute(from, to);
+  if (!ruta) return std::nullopt;
+  return ruta->distanceMeters;
+}
+
+std::size_t RoadNetwork::floyd03Bytes() const noexcept {
+  return floyd03_ ? floyd03_->bytesMatriz() : 0;
+}
+
+void RoadNetwork::habilitarFloyd03Cpu(const SimulationConfig &config,
+                                      std::size_t tile) {
+  if (floyd03_) throw std::logic_error("Floyd03: cache ya habilitada");
+  // Construir y verificar una tabla local antes de publicarla; la mutacion
+  // solo esta permitida durante inicializacion, previo a hilos de simulacion.
+  auto tabla = std::make_shared<equipego::analytics::TablaRutas03>(
+      equipego::analytics::floydWarshallBloquesCpu03(config, tile));
+  if (tabla->dimension() != adjacency.size()) {
+    throw std::invalid_argument("Floyd03: configuracion distinta de RoadNetwork");
+  }
+  for (const std::string &origen : tabla->nodos) {
+    if (adjacency.find(origen) == adjacency.end()) {
+      throw std::invalid_argument("Floyd03: nodo inexistente en RoadNetwork");
+    }
+    for (const std::string &destino : tabla->nodos) {
+      const auto ruta = shortestRoute(origen, destino);
+      const auto d = tabla->distanciaMetros(origen, destino);
+      if (ruta.has_value() != d.has_value()) {
+        throw std::logic_error("Floyd03: alcance distinto de Dijkstra");
+      }
+      if (ruta && std::abs(*d - ruta->distanceMeters) >
+                      1e-9 * std::max(1.0, std::abs(ruta->distanceMeters))) {
+        throw std::logic_error("Floyd03: distancia distinta de Dijkstra");
+      }
+    }
+  }
+  floyd03_ = std::move(tabla);
 }
 
 bool RoadNetwork::isReachable(const std::string &from,

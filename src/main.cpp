@@ -1,3 +1,19 @@
+#include "analytics/CoverageGpuDispatch06.hpp"
+#include "analytics/CourierCoverageRuntime06.hpp"
+#include "analytics/CourierLayoutRuntime04.hpp"
+#include "analytics/CourierLayoutGpuDispatch04.hpp"
+#include "analytics/CourierLoadLive10.hpp"
+#include "analytics/CourierLoadGpuDispatch10.hpp"
+#include "analytics/RestaurantDemandLive11.hpp"
+#include "analytics/RestaurantDemandGpuDispatch11.hpp"
+#include "analytics/OrderWaitLive12.hpp"
+#include "analytics/OrderWaitGpuDispatch12.hpp"
+#include "analytics/DeliveryHistogram.hpp"
+#include "analytics/HeatmapRuntime05.hpp"
+#include "analytics/HeatmapGpuDispatch05.hpp"
+#ifdef EQUIPEGO_USE_CUDA
+#include "analytics/DeliveryHistogramGpu.hpp"
+#endif
 #include "config/Config.hpp"
 #include "core/Clock.hpp"
 #include "core/Logger.hpp"
@@ -22,6 +38,8 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <numeric>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -41,6 +59,7 @@
 
 struct EventAudit {
   std::size_t created = 0;
+  std::unordered_map<std::string, std::size_t> createdPerRestaurant;
   std::size_t delivered = 0;
   std::size_t rejected = 0;
   std::size_t reassigned = 0;
@@ -48,6 +67,7 @@ struct EventAudit {
   std::size_t stopping = 0;
   long long deliveryDurationSumMs = 0;
   long long maxDeliveryMs = 0;
+  std::vector<long long> deliveryDurationsMs;
   std::unordered_map<std::string, std::size_t> deliveredPerCourier;
 };
 
@@ -118,6 +138,8 @@ EventAudit auditEventLog(const std::string &filename,
         throw std::runtime_error("Pedido creado dos veces: " + orderId);
       }
       ++audit.created;
+      ++audit.createdPerRestaurant[
+          event.at("restaurant").get<std::string>()];
     } else if (name == "orderAssigned") {
       if (creationTimes.find(orderId) == creationTimes.end() ||
           !event.contains("courier")) {
@@ -143,6 +165,7 @@ EventAudit auditEventLog(const std::string &filename,
         throw std::runtime_error("Duracion negativa: " + orderId);
       }
       ++audit.delivered;
+      audit.deliveryDurationsMs.push_back(duration);
       ++audit.deliveredPerCourier[courier];
       audit.deliveryDurationSumMs += duration;
       if (duration > audit.maxDeliveryMs) {
@@ -437,11 +460,106 @@ int main(int argc, char *argv[]) {
 
     SimulationClock clock;
     EventLogger logger(config.logFilePath, true);
+#ifdef EQUIPEGO_USE_CUDA
+    equipego::analytics::PropietarioGpuHistograma propietarioGpu;
+#endif
     RoadNetwork roadNetwork(config);
+    // Feature 03: GPU optativa. Nunca se usa en consultas de ETA en caliente:
+    // solo precalcula la tabla ANTES de iniciar Fleet/Dispatcher y sus hilos.
+    const char* flagGpu03 = std::getenv("EQUIPEGO_FLOYD03_GPU");
+    const std::string valorGpu03 = flagGpu03 ? std::string(flagGpu03) : "0";
+    const char* flagCpu03Previo = std::getenv("EQUIPEGO_FLOYD03_CPU");
+    const std::string valorCpu03Previo = flagCpu03Previo
+        ? std::string(flagCpu03Previo) : "0";
+    if ((valorGpu03 != "0" && valorGpu03 != "1") ||
+        (valorCpu03Previo != "0" && valorCpu03Previo != "1")) {
+      throw std::invalid_argument("FLOYD03: flags CPU/GPU deben ser 0 o 1");
+    }
+    if (valorGpu03 == "1" && valorCpu03Previo == "1") {
+      throw std::invalid_argument("FLOYD03: CPU=1 y GPU=1 son excluyentes");
+    }
+    if (valorGpu03 == "1") {
+#ifdef EQUIPEGO_USE_CUDA
+      try {
+        const auto info03 = roadNetwork.habilitarFloyd03Gpu(config, 4096);
+        std::cerr << "FLOYD03_GPU_CACHE,enabled=1,nodos=" << info03.nodos
+                  << ",pares_verificados=" << info03.paresVerificados
+                  << ",bytes=" << info03.bytesMatriz
+                  << ",kernel_ms=" << info03.kernelMs
+                  << ",total_ms=" << info03.totalMs << '\n';
+      } catch (const std::exception& error03) {
+        // No se publica una tabla parcial: todas las consultas usan Dijkstra.
+        std::cerr << "FLOYD03_GPU_CACHE,enabled=0,fallback=Dijkstra,motivo="
+                  << error03.what() << '\n';
+      }
+#else
+      std::cerr << "FLOYD03_GPU_CACHE,enabled=0,fallback=Dijkstra,motivo="
+                   "USE_CUDA_OFF\n";
+#endif
+    }
+    // Opt-in para experimentar sin modificar el recorrido real de Dijkstra.
+    // Solo inicializar antes de Fleet/Dispatcher y sus hilos.
+    if (const char* flag03 = std::getenv("EQUIPEGO_FLOYD03_CPU")) {
+      const std::string valor03(flag03);
+      if (valor03 != "0" && valor03 != "1") {
+        throw std::invalid_argument("EQUIPEGO_FLOYD03_CPU debe ser 0 o 1");
+      }
+      if (valor03 == "1") {
+        try {
+          roadNetwork.habilitarFloyd03Cpu(config, 16);
+          std::cerr << "FLOYD03_CPU_CACHE,enabled=1,nodos="
+                    << config.nodes.size() << ",bytes="
+                    << roadNetwork.floyd03Bytes() << '\n';
+        } catch (const std::exception &error03) {
+          // Cualquier fallo de precalculo conserva Dijkstra sin tabla.
+          std::cerr << "FLOYD03_CPU_CACHE,enabled=0,fallback=Dijkstra,motivo="
+                    << error03.what() << '\n';
+        }
+      }
+    }
     OrderBook orderBook(static_cast<std::size_t>(config.orders.maxPending));
     OrderProducer producer(config, orderBook, logger, clock, roadNetwork);
     Fleet fleet(config, roadNetwork, clock);
     Dispatcher dispatcher(config, roadNetwork, fleet);
+#ifdef EQUIPEGO_USE_CUDA
+    // El mismo propietario de CUDA atiende Histogram y el despacho ETA.
+    // Umbral por defecto 128: evitar copias GPU en flotas diminutas.
+    // EQUIPEGO_GPU08_MIN_QUOTES=1 permite verificar la ruta con flota pequena.
+    std::size_t minimoGpu08 = 128;
+    if (const char* variable = std::getenv("EQUIPEGO_GPU08_MIN_QUOTES")) {
+      char* fin = nullptr;
+      errno = 0;
+      const unsigned long long valor = std::strtoull(variable, &fin, 10);
+      if (errno != 0 || fin == variable || *fin != '\0' ||
+          valor == 0 || valor > 100000000ULL) {
+        throw std::invalid_argument("EQUIPEGO_GPU08_MIN_QUOTES invalido");
+      }
+      minimoGpu08 = static_cast<std::size_t>(valor);
+    }
+    dispatcher.setGpuEtaSubmitter(
+        [&propietarioGpu](std::vector<equipego::analytics::EtaCandidato> datos) {
+          return propietarioGpu.enviarEta(std::move(datos));
+        },
+        minimoGpu08);
+    // Feature09: agrupacion observacional de pedidos por restaurante.
+    // Por defecto solo envia lotes de al menos 16 pedidos a GPU;
+    // EQUIPEGO_GPU09_MIN_ORDERS=1 habilita la ruta en pruebas con lotes pequenos.
+    std::size_t minimoGpu09 = 16;
+    if (const char* variable09 = std::getenv("EQUIPEGO_GPU09_MIN_ORDERS")) {
+      char* fin09 = nullptr;
+      errno = 0;
+      const unsigned long long valor09 = std::strtoull(variable09, &fin09, 10);
+      if (errno != 0 || fin09 == variable09 || *fin09 != '\0' ||
+          valor09 == 0 || valor09 > 100000000ULL) {
+        throw std::invalid_argument("EQUIPEGO_GPU09_MIN_ORDERS invalido");
+      }
+      minimoGpu09 = static_cast<std::size_t>(valor09);
+    }
+    dispatcher.setGpuScan09Submitter(
+        [&propietarioGpu](std::vector<std::size_t> ids, std::size_t restaurantes) {
+          return propietarioGpu.enviarScan09(std::move(ids), restaurantes);
+        }, minimoGpu09);
+#endif
 
     std::unique_ptr<SimulationDashboard> dashboard;
     if (showGui) {
@@ -505,8 +623,118 @@ int main(int argc, char *argv[]) {
     const std::size_t dispatcherRejected = dispatcher.getRejectedCount();
     const std::size_t dispatcherPending = dispatcher.getPendingCount();
 
+    // Feature10 E4: muestra observacional al terminar Dispatcher, ANTES de
+    // detener Fleet. Los couriers siguen vivos; snapshot individual por mutex.
+    // Desactivado por defecto. No modifica pedidos, ETA ni Dispatcher.
+    if (const char* flag10 = std::getenv("EQUIPEGO_LOAD10")) {
+      const std::string modo10(flag10);
+      if (modo10 != "0" && modo10 != "1") {
+        std::cerr << "REDUCTION10_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo10 == "1") {
+        try {
+          const char* flagGpu10 = std::getenv("EQUIPEGO_LOAD10_GPU");
+          const std::string modoGpu10 = flagGpu10 ? std::string(flagGpu10) : "0";
+          if (modoGpu10 != "0" && modoGpu10 != "1")
+            throw std::invalid_argument("EQUIPEGO_LOAD10_GPU debe ser 0 o 1");
+          const auto captura10 = equipego::analytics::capturarCargaFleet10(fleet);
+#ifdef EQUIPEGO_USE_CUDA
+          const auto seleccion10 = equipego::analytics::seleccionarCarga10(
+              captura10.reservas, modoGpu10 == "1", true,
+              [&propietarioGpu](std::vector<std::uint32_t> reservas10) {
+                return propietarioGpu.enviarCarga10(std::move(reservas10));
+              });
+#else
+          const auto seleccion10 = equipego::analytics::seleccionarCarga10(
+              captura10.reservas, modoGpu10 == "1", false);
+#endif
+          const auto& r10 = seleccion10.resumen;
+          const std::string idMax10 = r10.tieneMax
+              ? captura10.courierIds.at(r10.indiceMax) : "NINGUNO";
+          std::cerr << "REDUCTION10_RUN,enabled=1,backend="
+                    << seleccion10.backend << ",couriers=" << r10.couriers
+                    << ",con_pedidos=" << r10.conPedidos
+                    << ",total_reservas=" << r10.totalReservas
+                    << ",max_reservas=" << r10.maxReservas
+                    << ",courier_max=" << idMax10
+                    << ",promedio=" << r10.promedio()
+                    << ",gpu_usada=" << (seleccion10.gpuUsada ? 1 : 0)
+                    << ",fallback=" << seleccion10.fallback
+                    << ",kernel_ms=" << seleccion10.kernelMs
+                    << ",total_ms=" << seleccion10.totalMs << '\n';
+        } catch (const std::exception& error10) {
+          std::cerr << "REDUCTION10_RUN,enabled=0,error="
+                    << error10.what() << '\n';
+        }
+      }
+    }
+
     fleet.requestStop();
     fleet.join();
+
+    // Feature04 E3: snapshot real del Fleet terminado (observacional).
+    // La comparacion AoS/SoA NO sustituye el ETA vial del Dispatcher.
+    if (const char* flag04 = std::getenv("EQUIPEGO_LAYOUT04")) {
+      const std::string modo04(flag04);
+      if (modo04 != "0" && modo04 != "1") {
+        std::cerr << "LAYOUT04_RUNTIME,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo04 == "1") {
+        try {
+          const auto registros04 = equipego::performance04::capturarFleet04(
+              config, fleet);
+          const auto diagnostico04 =
+              equipego::performance04::compararLayoutRuntime04(config, registros04);
+          std::cerr << "LAYOUT04_RUNTIME,enabled=1,source=Fleet_post_join"
+                    << ",couriers=" << diagnostico04.couriers
+                    << ",disponibles=" << diagnostico04.disponibles
+                    << ",equivalencia_AoS_SoA=OK,eta_oficial=NO"
+                    << ",modifica_dispatch=NO\n";
+          // E4: GPU opcional en la misma cola de Histogram/Reduction/Scan.
+          // El ETA oficial y los pedidos no dependen de este diagnostico.
+          const char* flagGpu04 = std::getenv("EQUIPEGO_LAYOUT04_GPU");
+          const std::string modoGpu04 = flagGpu04 ? flagGpu04 : "0";
+          if (modoGpu04 != "0" && modoGpu04 != "1")
+            throw std::invalid_argument("EQUIPEGO_LAYOUT04_GPU debe ser 0 o 1");
+          if (modoGpu04 == "1") {
+            const auto [lat04, lon04] = equipego::performance04::nodoLatLon04(
+                config, config.restaurants.front().nodeId);
+            const auto destino04 = equipego::performance04::proyectarMetros04(
+                config, lat04, lon04);
+#ifdef EQUIPEGO_USE_CUDA
+            const auto gpu04 = equipego::performance04::seleccionarLayoutGpu04(
+                registros04, destino04.x, destino04.y, 0.0f, 1, true, true,
+                [&propietarioGpu](std::vector<equipego::performance04::CourierAoS04> v,
+                                  float x, float y, float tramo, unsigned barridos) {
+                  return propietarioGpu.enviarLayoutAoS04(
+                      std::move(v), x, y, tramo, barridos);
+                },
+                [&propietarioGpu](equipego::performance04::CourierSoA04 v,
+                                  float x, float y, float tramo, unsigned barridos) {
+                  return propietarioGpu.enviarLayoutSoA04(
+                      std::move(v), x, y, tramo, barridos);
+                });
+#else
+            const auto gpu04 = equipego::performance04::seleccionarLayoutGpu04(
+                registros04, destino04.x, destino04.y, 0.0f, 1, true, false);
+#endif
+            if (gpu04.usada) {
+              std::cerr << "LAYOUT04_GPU_OWNER,backend=GPU,verified=1,couriers="
+                        << gpu04.couriers << ",aos_kernel_ms="
+                        << gpu04.aosKernelMs << ",aos_total_ms="
+                        << gpu04.aosTotalMs << ",soa_kernel_ms="
+                        << gpu04.soaKernelMs << ",soa_total_ms="
+                        << gpu04.soaTotalMs << ",max_error="
+                        << gpu04.maxError << ",eta_oficial=NO\n";
+            } else {
+              std::cerr << "LAYOUT04_GPU_FALLBACK,backend=CPU,reason="
+                        << gpu04.fallback << ",modifica_dispatch=NO\n";
+            }
+          }
+        } catch (const std::exception& error04) {
+          std::cerr << "LAYOUT04_RUNTIME,enabled=0,fallback=sin_diagnostico,motivo="
+                    << error04.what() << '\n';
+        }
+      }
+    }
 
     std::vector<CourierOrderResult> fleetResults = fleet.takeFinishedOrders();
     const std::size_t fleetFinalizedCount = fleetResults.size();
@@ -572,6 +800,268 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("Los pedidos pendientes no coinciden");
     }
 
+    // Feature11 E4: histograma 2D de orderCreated reales en el JSONL YA
+    // auditado. Analisis observacional al terminar la simulacion; opt-in.
+    if (const char* flag11 = std::getenv("EQUIPEGO_HIST11")) {
+      const std::string modo11(flag11);
+      if (modo11 != "0" && modo11 != "1") {
+        std::cerr << "HISTOGRAM11_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo11 == "1") {
+        try {
+          const char* flagGpu11 = std::getenv("EQUIPEGO_HIST11_GPU");
+          const std::string modoGpu11 = flagGpu11 ? std::string(flagGpu11) : "0";
+          if (modoGpu11 != "0" && modoGpu11 != "1")
+            throw std::invalid_argument("EQUIPEGO_HIST11_GPU debe ser 0 o 1");
+          std::vector<std::string> ids11;
+          ids11.reserve(config.restaurants.size());
+          for (const auto& r11 : config.restaurants) ids11.push_back(r11.id);
+          constexpr std::uint64_t franjaMs11 = 60000;
+          const auto capturado11 = equipego::analytics::capturarDemandaArchivo11(
+              config.logFilePath, ids11, franjaMs11);
+          if (capturado11.pedidos.size() != audit.created)
+            throw std::logic_error("Feature11: total distinto de EventAudit");
+#ifdef EQUIPEGO_USE_CUDA
+          const auto seleccionado11 = equipego::analytics::seleccionarDemanda11(
+              capturado11.pedidos, ids11.size(), capturado11.franjas,
+              modoGpu11 == "1", true,
+              [&propietarioGpu](std::vector<equipego::analytics::PedidoDemanda11> p,
+                               std::size_t r, std::size_t f) {
+                return propietarioGpu.enviarDemanda11(std::move(p), r, f);
+              });
+#else
+          const auto seleccionado11 = equipego::analytics::seleccionarDemanda11(
+              capturado11.pedidos, ids11.size(), capturado11.franjas,
+              modoGpu11 == "1", false);
+#endif
+          const auto& h11 = seleccionado11.histograma;
+          for (std::size_t i11 = 0; i11 < ids11.size(); ++i11) {
+            const auto found11 = audit.createdPerRestaurant.find(ids11[i11]);
+            const std::size_t auditCount11 = found11 == audit.createdPerRestaurant.end()
+                ? 0u : found11->second;
+            if (h11.porRestaurante[i11] != auditCount11)
+              throw std::logic_error("Feature11: conteo distinto de EventAudit");
+          }
+          std::size_t mayor11 = 0;
+          for (std::size_t i11 = 1; i11 < ids11.size(); ++i11)
+            if (h11.porRestaurante[i11] > h11.porRestaurante[mayor11])
+              mayor11 = i11;
+          if (const char* rutaCsv11 = std::getenv("EQUIPEGO_HIST11_CSV")) {
+            if (*rutaCsv11) {
+              std::ofstream salida11(rutaCsv11);
+              if (!salida11) throw std::runtime_error("Feature11: no se puede crear CSV");
+              equipego::analytics::escribirDemandaCSV11(
+                  salida11, h11, ids11, franjaMs11);
+              salida11.flush();
+              if (!salida11) throw std::runtime_error("Feature11: escritura CSV fallida");
+            }
+          }
+          std::cerr << "HISTOGRAM11_RUN,enabled=1,backend=" << seleccionado11.backend
+                    << ",pedidos=" << h11.totalPedidos
+                    << ",restaurantes=" << h11.restaurantes
+                    << ",franjas=" << h11.franjas << ",franja_ms=" << franjaMs11
+                    << ",top_restaurante=" << ids11.at(mayor11)
+                    << ",top_pedidos=" << h11.porRestaurante.at(mayor11)
+                    << ",gpu_usada=" << (seleccionado11.gpuUsada ? 1 : 0)
+                    << ",fallback=" << seleccionado11.fallback
+                    << ",kernel_ms=" << seleccionado11.kernelMs
+                    << ",total_ms=" << seleccionado11.totalMs << '\n';
+        } catch (const std::exception& error11) {
+          std::cerr << "HISTOGRAM11_RUN,enabled=0,error="
+                    << error11.what() << '\n';
+        }
+      }
+    }
+
+    // Feature12 E4: filtro estable de esperas reales post-auditoria, opt-in.
+    // Hasta primera asignacion, rechazo o cierre de simulacion si pendiente.
+    if (const char* flag12 = std::getenv("EQUIPEGO_FILTER12")) {
+      const std::string modo12(flag12);
+      if (modo12 != "0" && modo12 != "1") {
+        std::cerr << "FILTER12_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (modo12 == "1") {
+        try {
+          const char* flagGpu12 = std::getenv("EQUIPEGO_FILTER12_GPU");
+          const std::string modoGpu12 = flagGpu12 ? std::string(flagGpu12) : "0";
+          if (modoGpu12 != "0" && modoGpu12 != "1")
+            throw std::invalid_argument("EQUIPEGO_FILTER12_GPU debe ser 0 o 1");
+          std::uint64_t umbral12 = 30000;
+          if (const char* valor12 = std::getenv("EQUIPEGO_FILTER12_UMBRAL_MS")) {
+            const std::string s12(valor12);
+            if (s12.empty() || s12.find_first_not_of("0123456789") != std::string::npos)
+              throw std::invalid_argument("Feature12: umbral no numerico");
+            std::size_t consumidos12 = 0;
+            umbral12 = std::stoull(s12, &consumidos12, 10);
+            if (consumidos12 != s12.size())
+              throw std::invalid_argument("Feature12: umbral invalido");
+          }
+          const auto capturado12 = equipego::analytics::capturarEsperasArchivo12(
+              config.logFilePath);
+          if (capturado12.pedidos.size() != audit.created)
+            throw std::logic_error("Feature12: capturas distintas de EventAudit");
+#ifdef EQUIPEGO_USE_CUDA
+          const auto elegido12 = equipego::analytics::seleccionarFiltro12(
+              capturado12.esperasMs, umbral12, modoGpu12 == "1", true,
+              [&propietarioGpu](std::vector<std::uint64_t> esperas,
+                               std::uint64_t umbral) {
+                return propietarioGpu.enviarFiltro12(std::move(esperas), umbral);
+              });
+#else
+          const auto elegido12 = equipego::analytics::seleccionarFiltro12(
+              capturado12.esperasMs, umbral12, modoGpu12 == "1", false);
+#endif
+          if (elegido12.filtro.totalEntradas != capturado12.pedidos.size() ||
+              elegido12.filtro.seleccionados() + elegido12.filtro.descartados() !=
+                  capturado12.pedidos.size())
+            throw std::logic_error("Feature12: balance del filtro invalido");
+          if (const char* csv12 = std::getenv("EQUIPEGO_FILTER12_CSV")) {
+            if (*csv12) {
+              std::ofstream salida12(csv12);
+              if (!salida12)
+                throw std::runtime_error("Feature12: no se puede crear CSV");
+              equipego::analytics::escribirFiltroCSV12(
+                  salida12, capturado12, elegido12.filtro);
+              salida12.flush();
+              if (!salida12) throw std::runtime_error("Feature12: CSV incompleto");
+            }
+          }
+          std::cerr << "FILTER12_RUN,enabled=1,backend=" << elegido12.backend
+                    << ",pedidos=" << elegido12.filtro.totalEntradas
+                    << ",seleccionados=" << elegido12.filtro.seleccionados()
+                    << ",descartados=" << elegido12.filtro.descartados()
+                    << ",asignados=" << capturado12.asignados
+                    << ",rechazados=" << capturado12.rechazados
+                    << ",pendientes=" << capturado12.pendientes
+                    << ",umbral_ms=" << umbral12
+                    << ",gpu_usada=" << (elegido12.gpuUsada ? 1 : 0)
+                    << ",fallback=" << elegido12.fallback
+                    << ",kernel_ms=" << elegido12.kernelMs
+                    << ",total_ms=" << elegido12.totalMs << '\n';
+        } catch (const std::exception& error12) {
+          std::cerr << "FILTER12_RUN,enabled=0,error=" << error12.what() << '\n';
+        }
+      }
+    }
+
+    // Feature06 E4: eleccion observacional CPU/GPU con referencia CPU
+    // y fallback seguro. Usa SOLO el propietario CUDA, despues de Fleet::join.
+    if (const char* flagCoverage06 = std::getenv("EQUIPEGO_COVERAGE06")) {
+      const std::string mode06(flagCoverage06);
+      if (mode06 != "0" && mode06 != "1") {
+        std::cerr << "STENCIL06_RUN,enabled=0,error=FLAG_INVALID_0_OR_1\n";
+      } else if (mode06 == "1") {
+        try {
+          const char* flagGpu06 = std::getenv("EQUIPEGO_COVERAGE06_GPU");
+          const std::string gpuMode06 = flagGpu06 ? std::string(flagGpu06) : "0";
+          if (gpuMode06 != "0" && gpuMode06 != "1")
+            throw std::invalid_argument("EQUIPEGO_COVERAGE06_GPU debe ser 0 o 1");
+          const auto captured06 = equipego::stencil06::capturarFleet06(
+              config, fleet, 512);
+#ifdef EQUIPEGO_USE_CUDA
+          const auto selected06 = equipego::stencil06::seleccionarCobertura06(
+              captured06.campo, 20, gpuMode06 == "1", true,
+              [&propietarioGpu](equipego::stencil06::Campo06 campo,
+                               unsigned int barridos) {
+                return propietarioGpu.enviarCobertura06(
+                    std::move(campo), barridos,
+                    equipego::stencil06::VarianteGpu06::BasicoGlobal);
+              });
+#else
+          const auto selected06 = equipego::stencil06::seleccionarCobertura06(
+              captured06.campo, 20, gpuMode06 == "1", false);
+#endif
+          if (selected06.gpuSolicitada && !selected06.gpuUsada)
+            std::cerr << "STENCIL06_GPU_FALLBACK,reason="
+                      << selected06.motivoFallback << '\n';
+          if (selected06.gpuUsada)
+            std::cerr << "STENCIL06_GPU_OWNER,verified=1,kernel_ms="
+                      << selected06.kernelMs << ",total_ms="
+                      << selected06.totalMs << ",max_error="
+                      << selected06.errorMaximo << '\n';
+          const char* out06 = std::getenv("EQUIPEGO_COVERAGE06_PREFIX");
+          const std::string prefix06 = out06 ? std::string(out06) :
+              "../Resultados_Feature06/Integracion06/coverage06_cpu_run";
+          equipego::stencil06::guardarCobertura06(
+              config, captured06, selected06.valores, prefix06, 20,
+              selected06.backend);
+          std::cerr << "STENCIL06_RUN,enabled=1,backend="
+                    << selected06.backend << ",couriers="
+                    << captured06.couriersTotales << ",used="
+                    << captured06.couriersUsados << ",broken="
+                    << captured06.couriersAveriados << ",sources="
+                    << captured06.fuentesUnicas << ",grid=512x512,png="
+                    << prefix06 << ".png\n";
+        } catch (const std::exception& error06) {
+          std::cerr << "STENCIL06_RUN,enabled=0,error="
+                    << error06.what() << '\n';
+        }
+      }
+    }
+
+    // Feature05 E3: mapa de ORIGENES (restaurantes) de los pedidos
+    // generados en esta ejecucion, solo al finalizar la simulacion.
+    // No inventa destinos ni reemplaza el despacho.
+    if (const char* flagHeatmap05 = std::getenv("EQUIPEGO_HEATMAP05")) {
+      const std::string modeHeatmap05(flagHeatmap05);
+      if (modeHeatmap05 != "0" && modeHeatmap05 != "1") {
+        throw std::invalid_argument("EQUIPEGO_HEATMAP05 debe ser 0 o 1");
+      }
+      if (modeHeatmap05 == "1") {
+        try {
+          const auto projected05 =
+              equipego::convolution05::projectRestaurantOrders05(
+                  config, audit.createdPerRestaurant, 512);
+          if (projected05.created != audit.created) {
+            throw std::logic_error("HEATMAP05: created != auditoria de eventos");
+          }
+          // E4: opt-in CUDA solo a traves del propietario GPU existente.
+          const char* flagGpu05 = std::getenv("EQUIPEGO_HEATMAP05_GPU");
+          const std::string gpuMode05 = flagGpu05 ? std::string(flagGpu05) : "0";
+          if (gpuMode05 != "0" && gpuMode05 != "1") {
+            throw std::invalid_argument("EQUIPEGO_HEATMAP05_GPU debe ser 0 o 1");
+          }
+          const bool gpuHeatmap05 = gpuMode05 == "1";
+#ifdef EQUIPEGO_USE_CUDA
+          const auto selected05 = equipego::convolution05::selectHeatmap05(
+              projected05.grid, gpuHeatmap05, true,
+              [&propietarioGpu](equipego::convolution05::DemandGrid05 data) {
+                return propietarioGpu.enviarHeatmap05(
+                    std::move(data),
+                    equipego::convolution05::GpuAlgorithm05::TiledSharedConstant);
+              });
+#else
+          const auto selected05 = equipego::convolution05::selectHeatmap05(
+              projected05.grid, gpuHeatmap05, false);
+#endif
+          if (selected05.gpuRequested && !selected05.usedGpu) {
+            std::cerr << "HEATMAP05_GPU_FALLBACK,reason="
+                      << selected05.fallbackReason << '\n';
+          }
+          if (selected05.usedGpu) {
+            std::cerr << "HEATMAP05_GPU_OWNER,verified=1,kernel_ms="
+                      << selected05.kernelMs << ",total_ms="
+                      << selected05.totalMs << '\n';
+          }
+          const char* prefixEnv05 = std::getenv("EQUIPEGO_HEATMAP05_PREFIX");
+          const std::string prefix05 = prefixEnv05
+              ? std::string(prefixEnv05)
+              : "../Resultados_Feature05/Integracion05/heatmap05_cpu_run";
+          equipego::convolution05::saveRunHeatmap05(
+              config, projected05, selected05.values, prefix05, selected05.backend);
+          std::cerr << "HEATMAP05_RUN,enabled=1,backend="
+                    << (selected05.usedGpu ? "GPU" : "CPU")
+                    << ",created="
+                    << projected05.created << ",restaurants="
+                    << projected05.restaurantsWithOrders
+                    << ",grid=512x512,png=" << prefix05 << ".png\n";
+        } catch (const std::exception& heatmap05Error) {
+          // El diagnostico no puede cambiar el balance ni el exit de una
+          // simulacion correcta. El error siempre queda visible en stderr.
+          std::cerr << "HEATMAP05_RUN,enabled=0,error="
+                    << heatmap05Error.what() << '\n';
+        }
+      }
+    }
+
     const double avgDeliveryMs =
         audit.delivered > 0
             ? static_cast<double>(audit.deliveryDurationSumMs) /
@@ -588,6 +1078,25 @@ int main(int argc, char *argv[]) {
       throw std::logic_error("La suma por repartidor no coincide");
     }
 
+    auto histograma =
+        equipego::analytics::histogramaEntregasCPU(audit.deliveryDurationsMs);
+#ifdef EQUIPEGO_USE_CUDA
+    // El hilo propietario serializa el acceso a CUDA; main recibe un future.
+    auto futuroGpu = propietarioGpu.enviar(audit.deliveryDurationsMs);
+    const auto resultadoGpu = futuroGpu.get();
+    if (resultadoGpu.bins != histograma) {
+      throw std::logic_error("Histograma GPU distinto de referencia CPU");
+    }
+    histograma = resultadoGpu.bins;
+    std::cerr << "HISTOGRAMA_GPU_07,kernel_ms=" << resultadoGpu.kernelMs
+              << ",total_ms=" << resultadoGpu.totalMs << '\n';
+#endif
+    const auto sumaBins = std::accumulate(histograma.begin(), histograma.end(),
+                                          std::uint64_t{0});
+    if (sumaBins != audit.delivered) {
+      throw std::logic_error("El histograma no coincide con las entregas");
+    }
+    const nlohmann::json histogramJson = histograma;
     const nlohmann::json summary = {{"created", audit.created},
                                     {"delivered", audit.delivered},
                                     {"rejected", audit.rejected},
@@ -596,7 +1105,16 @@ int main(int argc, char *argv[]) {
                                     {"breakdowns", audit.breakdowns},
                                     {"avgDeliveryMs", avgDeliveryMs},
                                     {"maxDeliveryMs", audit.maxDeliveryMs},
-                                    {"deliveredPerCourier", perCourier}};
+                                    {"deliveredPerCourier", perCourier},
+                                    {"deliveryHistogramMinutes", histogramJson}};
+#ifdef EQUIPEGO_USE_CUDA
+    std::cerr << "REDUCTION_GPU_08,intentos=" << dispatcher.getGpu08Intentos()
+              << ",usos=" << dispatcher.getGpu08Usos()
+              << ",timeouts=" << dispatcher.getGpu08Timeouts()
+              << ",errores=" << dispatcher.getGpu08Errores()
+              << ",diferencias=" << dispatcher.getGpu08Diferencias()
+              << ",minimo_candidatos=" << minimoGpu08 << '\n';
+#endif
     std::cout << summary.dump() << '\n' << std::flush;
     return 0;
 

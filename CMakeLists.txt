@@ -225,3 +225,600 @@ add_test(NAME test_dp12_motion COMMAND test_dp12_motion)
 list(APPEND DP_TEST_NAMES test_dp12_motion)
 
 set_tests_properties(${DP_TEST_NAMES} PROPERTIES TIMEOUT 30)
+
+# Feature CUDA 07, etapa CPU: test sin dependencias CUDA ni OpenCV.
+add_executable(test_delivery_histogram tests/test_delivery_histogram.cpp)
+target_include_directories(test_delivery_histogram PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_delivery_histogram PRIVATE Threads::Threads)
+add_test(NAME test_delivery_histogram COMMAND test_delivery_histogram)
+
+# Feature 07: CUDA es optativo y esta DESACTIVADO por defecto.
+option(USE_CUDA "Enable optional CUDA analytics" OFF)
+if(USE_CUDA)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    find_package(CUDAToolkit REQUIRED)
+
+    add_library(equipego_histogram_gpu STATIC
+        src/analytics/DeliveryHistogramGpu.cpp
+        src/analytics/DeliveryHistogramCuda.cu
+        src/analytics/EtaReductionCuda.cu
+        src/analytics/RestaurantOrderScanCuda.cu
+        src/map/FloydWarshallCuda03.cu)
+    target_include_directories(equipego_histogram_gpu PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(equipego_histogram_gpu PUBLIC
+        Threads::Threads CUDA::cudart)
+    set_target_properties(equipego_histogram_gpu PROPERTIES
+        CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
+
+    target_link_libraries(delivery_sim PRIVATE equipego_histogram_gpu)
+    target_compile_definitions(delivery_sim PRIVATE EQUIPEGO_USE_CUDA=1)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        target_link_libraries(delivery_sim_bench PRIVATE equipego_histogram_gpu)
+        target_compile_definitions(delivery_sim_bench PRIVATE EQUIPEGO_USE_CUDA=1)
+    endif()
+
+    add_executable(test_delivery_histogram_gpu
+        tests/test_delivery_histogram_gpu.cpp)
+    target_link_libraries(test_delivery_histogram_gpu PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_delivery_histogram_gpu
+        COMMAND test_delivery_histogram_gpu)
+
+    # Feature 08 — Reduction comparte el propietario y el runtime CUDA.
+    add_executable(test_eta_reduction_gpu tests/test_eta_reduction_gpu.cpp)
+    target_link_libraries(test_eta_reduction_gpu PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_eta_reduction_gpu COMMAND test_eta_reduction_gpu)
+
+    # Feature 09 - Scan estable GPU dentro del propietario CUDA.
+    add_executable(test_restaurant_order_scan_gpu
+        tests/test_restaurant_order_scan_gpu.cpp)
+    target_link_libraries(test_restaurant_order_scan_gpu PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_restaurant_order_scan_gpu
+        COMMAND test_restaurant_order_scan_gpu)
+endif()
+
+# Feature 08 - Reduction CPU (sin dependencia CUDA).
+add_executable(test_eta_reduction tests/test_eta_reduction.cpp)
+target_include_directories(test_eta_reduction PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_eta_reduction PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_eta_reduction PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_eta_reduction PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_eta_reduction COMMAND test_eta_reduction)
+
+# Feature 08: ruta real de eleccion de candidatos en el dispatcher.
+add_executable(test_eta_dispatch_order tests/test_eta_dispatch_order.cpp)
+target_include_directories(test_eta_dispatch_order PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_eta_dispatch_order PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_eta_dispatch_order PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_eta_dispatch_order PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_eta_dispatch_order COMMAND test_eta_dispatch_order)
+
+# Feature 08 — ruta de seleccion GPU con deadline y fallback CPU.
+# Test CPU puro: no requiere nvcc ni GPU.
+add_executable(test_eta_gpu_dispatch tests/test_eta_gpu_dispatch.cpp)
+target_include_directories(test_eta_gpu_dispatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_eta_gpu_dispatch PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_eta_gpu_dispatch PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_eta_gpu_dispatch PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_eta_gpu_dispatch COMMAND test_eta_gpu_dispatch)
+
+# Feature 09 — Scan (etapa 1 CPU): grouping stable por restaurante.
+add_executable(test_restaurant_order_scan tests/test_restaurant_order_scan.cpp)
+target_include_directories(test_restaurant_order_scan PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_order_scan PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_restaurant_order_scan PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_restaurant_order_scan PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_restaurant_order_scan COMMAND test_restaurant_order_scan)
+
+# Feature 09 — etapa 2: vista estable de pedidos reales sin alterar FIFO.
+add_executable(test_restaurant_order_live09 tests/test_restaurant_order_live09.cpp)
+target_include_directories(test_restaurant_order_live09 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_order_live09 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_restaurant_order_live09 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_restaurant_order_live09 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_restaurant_order_live09 COMMAND test_restaurant_order_live09)
+
+# Feature09 - Etapa 4: seleccion observacional GPU/CPU, sin NVCC en CPU.
+add_executable(test_restaurant_order_gpu_dispatch09
+    tests/test_restaurant_order_gpu_dispatch09.cpp)
+target_include_directories(test_restaurant_order_gpu_dispatch09 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_order_gpu_dispatch09 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_restaurant_order_gpu_dispatch09 PRIVATE
+        -fsanitize=thread -g -O1)
+    target_link_options(test_restaurant_order_gpu_dispatch09 PRIVATE
+        -fsanitize=thread)
+endif()
+add_test(NAME test_restaurant_order_gpu_dispatch09
+    COMMAND test_restaurant_order_gpu_dispatch09)
+set_tests_properties(test_restaurant_order_gpu_dispatch09 PROPERTIES TIMEOUT 30)
+
+
+# Feature 03 - Memory Tiling, etapa 1: tabla Floyd-Warshall CPU.
+# No sustituye Dijkstra ni altera el Dispatcher.
+add_executable(test_floyd_warshall03
+    tests/test_floyd_warshall03.cpp
+    src/map/RoadNetwork.cpp
+    src/config/ConfigLoader.cpp)
+configure_equipego_target(test_floyd_warshall03)
+add_test(NAME test_floyd_warshall03
+    COMMAND test_floyd_warshall03
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+set_tests_properties(test_floyd_warshall03 PROPERTIES TIMEOUT 30)
+
+
+# Feature 03 - Memory Tiling, etapa 2: cache optativa de distancias.
+add_executable(test_floyd_cache03
+    tests/test_floyd_cache03.cpp
+    src/map/RoadNetwork.cpp
+    src/config/ConfigLoader.cpp)
+configure_equipego_target(test_floyd_cache03)
+add_test(NAME test_floyd_cache03
+    COMMAND test_floyd_cache03
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+set_tests_properties(test_floyd_cache03 PROPERTIES TIMEOUT 30)
+
+
+# Feature 03 - Etapa 4: backend CUDA tiled; no modifica el dispatcher.
+# La prueba GPU solo se registra al compilar con USE_CUDA=ON.
+if(USE_CUDA)
+    add_executable(test_floyd_warshall_gpu03
+        tests/test_floyd_warshall_gpu03.cpp
+        src/map/RoadNetwork.cpp
+        src/config/ConfigLoader.cpp)
+    configure_equipego_target(test_floyd_warshall_gpu03)
+    target_link_libraries(test_floyd_warshall_gpu03 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_floyd_warshall_gpu03
+        COMMAND test_floyd_warshall_gpu03
+        ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+    set_tests_properties(test_floyd_warshall_gpu03 PROPERTIES TIMEOUT 120)
+endif()
+
+# Feature 03 - Etapa 7: integracion optativa de la tabla GPU, precalculo al inicio.
+# Sin nvcc o con USE_CUDA=OFF se conservan las 19 pruebas y Dijkstra.
+if(USE_CUDA)
+    target_sources(delivery_sim PRIVATE src/map/FloydWarshallGpuCache03.cpp)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        target_sources(delivery_sim_bench PRIVATE src/map/FloydWarshallGpuCache03.cpp)
+    endif()
+
+    add_executable(test_floyd_cache_gpu_integracion03
+        tests/test_floyd_cache_gpu_integracion03.cpp
+        src/map/FloydWarshallGpuCache03.cpp
+        src/map/RoadNetwork.cpp
+        src/config/ConfigLoader.cpp)
+    configure_equipego_target(test_floyd_cache_gpu_integracion03)
+    target_link_libraries(test_floyd_cache_gpu_integracion03 PRIVATE
+        equipego_histogram_gpu)
+    target_compile_definitions(test_floyd_cache_gpu_integracion03 PRIVATE
+        EQUIPEGO_USE_CUDA=1)
+    add_test(NAME test_floyd_cache_gpu_integracion03
+        COMMAND test_floyd_cache_gpu_integracion03
+        ${CMAKE_CURRENT_SOURCE_DIR}/config/equipetrol.json)
+    set_tests_properties(test_floyd_cache_gpu_integracion03 PROPERTIES TIMEOUT 120)
+endif()
+
+# Feature 04 - AoS vs SoA CPU, etapa 1 (sin cambios en dispatcher).
+add_executable(test_courier_layout04 tests/test_courier_layout04.cpp)
+target_include_directories(test_courier_layout04 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_layout04 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_courier_layout04 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_courier_layout04 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_courier_layout04 COMMAND test_courier_layout04)
+set_tests_properties(test_courier_layout04 PROPERTIES TIMEOUT 60)
+
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_courier_layout04 benchmarks/bench_courier_layout04.cpp)
+    target_include_directories(bench_courier_layout04 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_courier_layout04 PRIVATE Threads::Threads)
+endif()
+
+# Feature 04 - Etapa 2: kernels CUDA AoS / SoA de snapshot, sin mutar Fleet.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/CourierLayoutCuda04.cu)
+    add_executable(test_courier_layout_gpu04 tests/test_courier_layout_gpu04.cpp)
+    target_include_directories(test_courier_layout_gpu04 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_layout_gpu04 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_layout_gpu04 COMMAND test_courier_layout_gpu04)
+    set_tests_properties(test_courier_layout_gpu04 PROPERTIES TIMEOUT 120)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_courier_layout_gpu04
+            benchmarks/bench_courier_layout_gpu04.cpp)
+        target_include_directories(bench_courier_layout_gpu04 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_courier_layout_gpu04 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature 05 - Convolution de mapa de calor (CPU E1), sin tocar simulador.
+add_executable(test_order_heatmap05 tests/test_order_heatmap05.cpp)
+target_include_directories(test_order_heatmap05 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_order_heatmap05 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_order_heatmap05 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_order_heatmap05 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_order_heatmap05 COMMAND test_order_heatmap05)
+set_tests_properties(test_order_heatmap05 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_order_heatmap05 benchmarks/bench_order_heatmap05.cpp)
+    target_include_directories(bench_order_heatmap05 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_order_heatmap05 PRIVATE Threads::Threads)
+endif()
+
+# Feature 05 / Etapa 2 - EC2 05_conv. Opt-in GPU. Default remains CPU-only.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/OrderHeatmapCuda05.cu)
+    add_executable(test_order_heatmap_gpu05 tests/test_order_heatmap_gpu05.cpp)
+    target_include_directories(test_order_heatmap_gpu05 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_heatmap_gpu05 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_order_heatmap_gpu05 COMMAND test_order_heatmap_gpu05)
+    set_tests_properties(test_order_heatmap_gpu05 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_order_heatmap_gpu05
+            benchmarks/bench_order_heatmap_gpu05.cpp)
+        target_include_directories(bench_order_heatmap_gpu05 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_order_heatmap_gpu05 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature05 Etapa3: heatmap post-simulacion (CPU, opt-in) desde orderCreated.
+# No altera el dispatcher ni la semantica de pedidos y funciona sin CUDA.
+add_executable(test_heatmap_runtime05 tests/test_heatmap_runtime05.cpp)
+configure_equipego_target(test_heatmap_runtime05)
+add_test(NAME test_heatmap_runtime05 COMMAND test_heatmap_runtime05)
+set_tests_properties(test_heatmap_runtime05 PROPERTIES TIMEOUT 60)
+
+
+# Feature 05 / E4 - mapa real opcional GPU mediante propietario CUDA.
+add_executable(test_heatmap_gpu_dispatch05 tests/test_heatmap_gpu_dispatch05.cpp)
+target_include_directories(test_heatmap_gpu_dispatch05 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_heatmap_gpu_dispatch05 PRIVATE Threads::Threads)
+add_test(NAME test_heatmap_gpu_dispatch05 COMMAND test_heatmap_gpu_dispatch05)
+set_tests_properties(test_heatmap_gpu_dispatch05 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_heatmap_gpu_owner05 tests/test_heatmap_gpu_owner05.cpp)
+    target_include_directories(test_heatmap_gpu_owner05 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_heatmap_gpu_owner05 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_heatmap_gpu_owner05 COMMAND test_heatmap_gpu_owner05)
+    set_tests_properties(test_heatmap_gpu_owner05 PROPERTIES TIMEOUT 180)
+endif()
+
+
+# Feature 06 - Stencil CPU: cobertura de repartidores sobre nodos OSM.
+# No cambia Fleet, Dispatcher, estado de pedidos ni backend CUDA existente.
+add_executable(test_courier_coverage06 tests/test_courier_coverage06.cpp)
+target_include_directories(test_courier_coverage06 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_coverage06 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_courier_coverage06 PRIVATE -fsanitize=thread -g -O1)
+    target_link_options(test_courier_coverage06 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_courier_coverage06 COMMAND test_courier_coverage06)
+set_tests_properties(test_courier_coverage06 PROPERTIES TIMEOUT 60)
+
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_courier_coverage06 benchmarks/bench_courier_coverage06.cpp)
+    target_include_directories(bench_courier_coverage06 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_courier_coverage06 PRIVATE Threads::Threads)
+endif()
+
+
+# Feature06 Etapa 2 GPU: Stencil Jacobi (GPU optativa, CPU default intacto).
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/CourierCoverageCuda06.cu)
+    add_executable(test_courier_coverage_gpu06
+        tests/test_courier_coverage_gpu06.cpp)
+    target_include_directories(test_courier_coverage_gpu06 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_coverage_gpu06 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_coverage_gpu06 COMMAND test_courier_coverage_gpu06)
+    set_tests_properties(test_courier_coverage_gpu06 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_courier_coverage_gpu06
+            benchmarks/bench_courier_coverage_gpu06.cpp)
+        target_include_directories(bench_courier_coverage_gpu06 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_courier_coverage_gpu06 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+
+# Feature06 Etapa 3 - snapshot real observacional del Fleet, SOLO CPU opt-in.
+add_executable(test_courier_coverage_runtime06
+    tests/test_courier_coverage_runtime06.cpp)
+target_include_directories(test_courier_coverage_runtime06 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_coverage_runtime06 PRIVATE Threads::Threads)
+if(ENABLE_TSAN)
+    target_compile_options(test_courier_coverage_runtime06 PRIVATE
+        -fsanitize=thread -g -O1)
+    target_link_options(test_courier_coverage_runtime06 PRIVATE -fsanitize=thread)
+endif()
+add_test(NAME test_courier_coverage_runtime06 COMMAND test_courier_coverage_runtime06)
+set_tests_properties(test_courier_coverage_runtime06 PROPERTIES TIMEOUT 60)
+
+
+# Feature06 E4: seleccion GPU/CPU segura y propietario CUDA compartido.
+add_executable(test_courier_coverage_gpu_dispatch06
+    tests/test_courier_coverage_gpu_dispatch06.cpp)
+target_include_directories(test_courier_coverage_gpu_dispatch06 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_coverage_gpu_dispatch06 PRIVATE Threads::Threads)
+add_test(NAME test_courier_coverage_gpu_dispatch06
+    COMMAND test_courier_coverage_gpu_dispatch06)
+set_tests_properties(test_courier_coverage_gpu_dispatch06 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_courier_coverage_gpu_owner06
+        tests/test_courier_coverage_gpu_owner06.cpp)
+    target_include_directories(test_courier_coverage_gpu_owner06 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_coverage_gpu_owner06 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_coverage_gpu_owner06
+        COMMAND test_courier_coverage_gpu_owner06)
+    set_tests_properties(test_courier_coverage_gpu_owner06 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature04 Etapa 3: captura real observacional de Fleet, CPU opt-in.
+add_executable(test_courier_layout_runtime04
+    tests/test_courier_layout_runtime04.cpp)
+configure_equipego_target(test_courier_layout_runtime04)
+add_test(NAME test_courier_layout_runtime04 COMMAND test_courier_layout_runtime04)
+set_tests_properties(test_courier_layout_runtime04 PROPERTIES TIMEOUT 60)
+
+# Feature04 E4: fallback CPU y dispatch del propietario GPU (sin CUDA requerida).
+add_executable(test_courier_layout_gpu_dispatch04
+    tests/test_courier_layout_gpu_dispatch04.cpp)
+target_include_directories(test_courier_layout_gpu_dispatch04 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_layout_gpu_dispatch04 PRIVATE Threads::Threads)
+add_test(NAME test_courier_layout_gpu_dispatch04
+    COMMAND test_courier_layout_gpu_dispatch04)
+set_tests_properties(test_courier_layout_gpu_dispatch04 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_courier_layout_gpu_owner04
+        tests/test_courier_layout_gpu_owner04.cpp)
+    target_include_directories(test_courier_layout_gpu_owner04 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_layout_gpu_owner04 PRIVATE equipego_histogram_gpu)
+    add_test(NAME test_courier_layout_gpu_owner04
+        COMMAND test_courier_layout_gpu_owner04)
+    set_tests_properties(test_courier_layout_gpu_owner04 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature 10 / Etapa 1: reduction estadistica de cargas (solo CPU).
+# No altera dispatcher ni el propietario GPU actual.
+add_executable(test_courier_load_reduction10
+    tests/test_courier_load_reduction10.cpp)
+target_include_directories(test_courier_load_reduction10 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_load_reduction10 PRIVATE Threads::Threads)
+add_test(NAME test_courier_load_reduction10
+    COMMAND test_courier_load_reduction10)
+set_tests_properties(test_courier_load_reduction10 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_courier_load_reduction10
+        benchmarks/bench_courier_load_reduction10.cpp)
+    target_include_directories(bench_courier_load_reduction10 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_courier_load_reduction10 PRIVATE Threads::Threads)
+endif()
+
+# Feature 10 / Etapa 2: reduccion GPU opt-in, independiente de ETA08.
+# El hilo propietario compartido se conecta en la Etapa 3; no alterar Dispatcher.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/CourierLoadReductionCuda10.cu)
+    add_executable(test_courier_load_reduction_gpu10
+        tests/test_courier_load_reduction_gpu10.cpp)
+    target_include_directories(test_courier_load_reduction_gpu10 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_load_reduction_gpu10 PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_courier_load_reduction_gpu10
+        COMMAND test_courier_load_reduction_gpu10)
+    set_tests_properties(test_courier_load_reduction_gpu10 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_courier_load_reduction_gpu10
+            benchmarks/bench_courier_load_reduction_gpu10.cpp)
+        target_include_directories(bench_courier_load_reduction_gpu10 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_courier_load_reduction_gpu10 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature10 Etapa3: CPU fallback y propietario CUDA compartido.
+# No altera Dispatcher ni la politica ETA oficial.
+add_executable(test_courier_load_gpu_dispatch10
+    tests/test_courier_load_gpu_dispatch10.cpp)
+target_include_directories(test_courier_load_gpu_dispatch10 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_courier_load_gpu_dispatch10 PRIVATE Threads::Threads)
+add_test(NAME test_courier_load_gpu_dispatch10
+    COMMAND test_courier_load_gpu_dispatch10)
+set_tests_properties(test_courier_load_gpu_dispatch10 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_courier_load_gpu_owner10
+        tests/test_courier_load_gpu_owner10.cpp)
+    target_include_directories(test_courier_load_gpu_owner10 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_courier_load_gpu_owner10 PRIVATE
+        equipego_histogram_gpu Threads::Threads)
+    add_test(NAME test_courier_load_gpu_owner10
+        COMMAND test_courier_load_gpu_owner10)
+    set_tests_properties(test_courier_load_gpu_owner10 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature10 E4: adaptador observacional de instantaneas del Fleet real.
+add_executable(test_courier_load_live10 tests/test_courier_load_live10.cpp)
+target_include_directories(test_courier_load_live10 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(test_courier_load_live10 PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(test_courier_load_live10 PRIVATE Threads::Threads ${OpenCV_LIBS})
+add_test(NAME test_courier_load_live10 COMMAND test_courier_load_live10)
+set_tests_properties(test_courier_load_live10 PROPERTIES TIMEOUT 60)
+
+
+# Feature 11 / Histogram demanda por restaurante y franja / CPU E1
+add_executable(test_restaurant_demand_histogram11
+    tests/test_restaurant_demand_histogram11.cpp)
+target_include_directories(test_restaurant_demand_histogram11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_demand_histogram11 PRIVATE Threads::Threads)
+add_test(NAME test_restaurant_demand_histogram11
+    COMMAND test_restaurant_demand_histogram11)
+set_tests_properties(test_restaurant_demand_histogram11 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_restaurant_demand_histogram11
+        benchmarks/bench_restaurant_demand_histogram11.cpp)
+    target_include_directories(bench_restaurant_demand_histogram11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_restaurant_demand_histogram11 PRIVATE Threads::Threads)
+endif()
+
+# Feature 11 E2: histograma 2D de demanda por restaurante/franja, GPU opt-in.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/RestaurantDemandHistogramCuda11.cu)
+    add_executable(test_restaurant_demand_histogram_gpu11
+        tests/test_restaurant_demand_histogram_gpu11.cpp)
+    target_include_directories(test_restaurant_demand_histogram_gpu11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_restaurant_demand_histogram_gpu11 PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_restaurant_demand_histogram_gpu11
+        COMMAND test_restaurant_demand_histogram_gpu11)
+    set_tests_properties(test_restaurant_demand_histogram_gpu11 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_restaurant_demand_histogram_gpu11
+            benchmarks/bench_restaurant_demand_histogram_gpu11.cpp)
+        target_include_directories(bench_restaurant_demand_histogram_gpu11 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_restaurant_demand_histogram_gpu11 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature11 Etapa3: seleccion CPU/GPU y cola del propietario CUDA unico.
+add_executable(test_restaurant_demand_gpu_dispatch11
+    tests/test_restaurant_demand_gpu_dispatch11.cpp)
+target_include_directories(test_restaurant_demand_gpu_dispatch11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_restaurant_demand_gpu_dispatch11 PRIVATE Threads::Threads)
+add_test(NAME test_restaurant_demand_gpu_dispatch11
+    COMMAND test_restaurant_demand_gpu_dispatch11)
+set_tests_properties(test_restaurant_demand_gpu_dispatch11 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_restaurant_demand_gpu_owner11
+        tests/test_restaurant_demand_gpu_owner11.cpp)
+    target_include_directories(test_restaurant_demand_gpu_owner11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_restaurant_demand_gpu_owner11 PRIVATE
+        equipego_histogram_gpu Threads::Threads)
+    add_test(NAME test_restaurant_demand_gpu_owner11
+        COMMAND test_restaurant_demand_gpu_owner11)
+    set_tests_properties(test_restaurant_demand_gpu_owner11 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature11 E4: captura observacional del JSONL real tras EventAudit.
+add_executable(test_restaurant_demand_live11 tests/test_restaurant_demand_live11.cpp)
+configure_equipego_target(test_restaurant_demand_live11)
+add_test(NAME test_restaurant_demand_live11 COMMAND test_restaurant_demand_live11)
+set_tests_properties(test_restaurant_demand_live11 PROPERTIES TIMEOUT 60)
+
+
+# Feature 12 / Filter estable de esperas / CPU E1
+add_executable(test_order_wait_filter12 tests/test_order_wait_filter12.cpp)
+target_include_directories(test_order_wait_filter12 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_order_wait_filter12 PRIVATE Threads::Threads)
+add_test(NAME test_order_wait_filter12 COMMAND test_order_wait_filter12)
+set_tests_properties(test_order_wait_filter12 PROPERTIES TIMEOUT 60)
+if(EQUIPEGO_BUILD_BENCHMARK)
+    add_executable(bench_order_wait_filter12
+        benchmarks/bench_order_wait_filter12.cpp)
+    target_include_directories(bench_order_wait_filter12 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(bench_order_wait_filter12 PRIVATE Threads::Threads)
+endif()
+
+
+# Feature 12 E2: stable CUDA filter/compaction, optional backend.
+if(USE_CUDA)
+    target_sources(equipego_histogram_gpu PRIVATE
+        src/analytics/OrderWaitFilterCuda12.cu)
+    add_executable(test_order_wait_filter_gpu12
+        tests/test_order_wait_filter_gpu12.cpp)
+    target_include_directories(test_order_wait_filter_gpu12 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_wait_filter_gpu12 PRIVATE
+        equipego_histogram_gpu)
+    add_test(NAME test_order_wait_filter_gpu12
+        COMMAND test_order_wait_filter_gpu12)
+    set_tests_properties(test_order_wait_filter_gpu12 PROPERTIES TIMEOUT 180)
+    if(EQUIPEGO_BUILD_BENCHMARK)
+        add_executable(bench_order_wait_filter_gpu12
+            benchmarks/bench_order_wait_filter_gpu12.cpp)
+        target_include_directories(bench_order_wait_filter_gpu12 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(bench_order_wait_filter_gpu12 PRIVATE
+            equipego_histogram_gpu)
+    endif()
+endif()
+
+# Feature12 Etapa3: selector/fallback CPU y propietario CUDA compartido.
+add_executable(test_order_wait_gpu_dispatch12
+    tests/test_order_wait_gpu_dispatch12.cpp)
+target_include_directories(test_order_wait_gpu_dispatch12 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_order_wait_gpu_dispatch12 PRIVATE Threads::Threads)
+add_test(NAME test_order_wait_gpu_dispatch12
+    COMMAND test_order_wait_gpu_dispatch12)
+set_tests_properties(test_order_wait_gpu_dispatch12 PROPERTIES TIMEOUT 60)
+if(USE_CUDA)
+    add_executable(test_order_wait_gpu_owner12
+        tests/test_order_wait_gpu_owner12.cpp)
+    target_include_directories(test_order_wait_gpu_owner12 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_wait_gpu_owner12 PRIVATE
+        equipego_histogram_gpu Threads::Threads)
+    add_test(NAME test_order_wait_gpu_owner12 COMMAND test_order_wait_gpu_owner12)
+    set_tests_properties(test_order_wait_gpu_owner12 PROPERTIES TIMEOUT 180)
+endif()
+
+# Feature12 E4: filtro observacional de esperas en JSONL de simulacion real.
+add_executable(test_order_wait_live12 tests/test_order_wait_live12.cpp)
+configure_equipego_target(test_order_wait_live12)
+add_test(NAME test_order_wait_live12 COMMAND test_order_wait_live12)
+set_tests_properties(test_order_wait_live12 PROPERTIES TIMEOUT 60)
